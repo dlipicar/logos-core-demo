@@ -97,6 +97,38 @@ fn parse_args() -> Args {
     args
 }
 
+type Reply = Result<Value, String>;
+
+fn node_call(demo: &Demo) -> Reply {
+    demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20)).map_err(|e| e.to_string())
+}
+
+// A rule change restarts the import's facade: its old session closes and a new
+// one opens. These wait out that window, so a restart error is neither.
+fn until_answers(demo: &Demo) -> Reply {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let reply = node_call(demo);
+        if reply.is_ok() || Instant::now() >= deadline {
+            return reply;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
+/// The caller gate's own refusal, not a restart's.
+fn until_refused(demo: &Demo) -> Reply {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let reply = node_call(demo);
+        let gated = matches!(&reply, Err(e) if e.contains("NOT_AUTHORISED"));
+        if gated || Instant::now() >= deadline {
+            return reply;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
 fn main() {
     let args = parse_args();
     let blocks = Arc::new(AtomicU64::new(0));
@@ -172,10 +204,9 @@ fn main() {
 
     if args.caller_gate {
         // The import admits only the callers it names, checked when a caller's
-        // session to the peer opens: the app's first call is refused while
-        // bc_probe reads the node.
+        // session to the peer opens: the app is refused while bc_probe reads the node.
         demo.import_node_for(&peer, &args.remote_module, &["bc_probe"]).unwrap_or_else(|e| fail("callers", e));
-        let shell = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        let shell = until_refused(&demo);
         let probe = demo.probe().unwrap_or_else(|e| fail("callers", e));
         emit("callers", json!({ "shell_refused": shell.is_err(), "probe_ok": probe.get("ok") }));
         if shell.is_ok() || probe.get("ok").and_then(Value::as_bool) != Some(true) {
@@ -187,17 +218,17 @@ fn main() {
     if args.narrow_live {
         // Narrowing the callers of a live import ends the sessions it no longer
         // admits: the app's next call is refused.
-        let before = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        let before = until_answers(&demo);
         demo.import_node_for(&peer, &args.remote_module, &["bc_probe"]).unwrap_or_else(|e| fail("narrow", e));
-        std::thread::sleep(Duration::from_secs(1));
-        demo.wait_import_ready(demo_core::NODE, Duration::from_secs(60)).unwrap_or_else(|e| fail("narrow", e));
-        let after = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        let after = until_refused(&demo);
         emit("narrow_live", json!({ "before_ok": before.is_ok(), "after_refused": after.is_err() }));
         if before.is_err() || after.is_ok() {
             fail("narrow", format!("before {before:?}, after {after:?}"));
         }
         demo.import_node(&peer, &args.remote_module).unwrap_or_else(|e| fail("narrow", e));
-        demo.wait_import_ready(demo_core::NODE, Duration::from_secs(60)).unwrap_or_else(|e| fail("narrow", e));
+        if let Err(e) = until_answers(&demo) {
+            fail("narrow", e);
+        }
     }
 
     if args.whoami {

@@ -37,12 +37,24 @@ enum Cmd {
 
 /// Where the runtime and the demo's modules are, beside the installed app
 /// (`../share/logos-core-demo`, or a .app's Resources), unless
-/// LOGOS_CORE_DEMO_HOME says otherwise.
+/// LOGOS_CORE_DEMO_HOME says otherwise. A portable bundle keeps the runtime's
+/// executables beside the app and its modules one level up.
 pub fn desktop_paths() -> Paths {
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
         .unwrap_or_default();
+    if std::env::var_os("LOGOS_CORE_DEMO_HOME").is_none() && exe_dir.join("logos_runtime").exists() {
+        return Paths {
+            runtime_bin: exe_dir.join("logos_runtime"),
+            host_plain_bin: exe_dir.join("logos_host_plain"),
+            host_remote_bin: exe_dir.join("logos_host_remote"),
+            bundled_modules: exe_dir.join("../modules"),
+            app_modules: exe_dir.join("../app-modules"),
+            data: data_dir(),
+            tmp: short_tmp(),
+        };
+    }
     let home = std::env::var_os("LOGOS_CORE_DEMO_HOME").map(PathBuf::from).unwrap_or_else(|| {
         [exe_dir.join("../Resources"), exe_dir.join("../share/logos-core-demo")]
             .into_iter()

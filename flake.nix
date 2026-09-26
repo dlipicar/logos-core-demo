@@ -129,9 +129,52 @@
             ];
             meta.mainProgram = "bc-watch";
           };
+          # The apps, the runtime and the modules in one tree, for nix-bundle-dir:
+          # it carries bin/ and lib/ (relocating every dependency) and the module
+          # trees named in extraDirs.
+          portable = pkgs.runCommand "logos-core-demo" {
+            passthru.extraDirs = [ "modules" "app-modules" ];
+          } (let
+              app = self.packages.${system}.app;
+              runtime = self.packages.${system}.runtime;
+            in ''
+            mkdir -p $out/bin $out/lib $out/modules $out/app-modules
+            cp -L ${app}/bin/logos-core-demo ${self.packages.${system}.headless}/bin/logos-core-demo-headless $out/bin/
+            for b in logos_runtime logos_host_plain logos_host_remote; do cp -L ${runtime}/bin/$b $out/bin/; done
+            cp -L ${runtime}/lib/* $out/lib/
+            cp -rL ${runtime}/modules/. $out/modules/
+            cp -rL ${app}/share/logos-core-demo/modules/. $out/app-modules/
+            chmod -R u+w $out
+          '');
+          # A directory that runs without Nix: bin/logos-core-demo.
+          bundle = cli.nix-bundle-dir.bundlers.${system}.permissive self.packages.${system}.portable;
           # The generated clients, as committed under demo-core/src/clients.
           clients = logos-rust-sdk.lib.mkClients { inherit system; lidls = contracts system; };
           daemon = logos-logoscore-cli.packages.${system}.ctl;
+        }
+        // lib.optionalAttrs pkgs.stdenv.isDarwin {
+          # The bundle as a macOS app: MacOS/ holds bin/, so ../lib still resolves.
+          app-bundle = pkgs.runCommand "logos-core-demo-app" { } ''
+            contents="$out/Applications/Logos Core Demo.app/Contents"
+            mkdir -p "$contents"
+            cp -R ${self.packages.${system}.bundle}/bin "$contents/MacOS"
+            for d in lib modules app-modules; do cp -R ${self.packages.${system}.bundle}/$d "$contents/$d"; done
+            chmod -R u+w "$contents"
+            cat > "$contents/Info.plist" <<EOF
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0"><dict>
+              <key>CFBundleName</key><string>Logos Core Demo</string>
+              <key>CFBundleIdentifier</key><string>co.logos.coredemo</string>
+              <key>CFBundleExecutable</key><string>logos-core-demo</string>
+              <key>CFBundlePackageType</key><string>APPL</string>
+              <key>CFBundleShortVersionString</key><string>0.1.0</string>
+              <key>LSMinimumSystemVersion</key><string>12.0</string>
+              <key>NSHighResolutionCapable</key><true/>
+              <key>NSLocalNetworkUsageDescription</key><string>Logos Core Demo links to a Logos node on your network.</string>
+            </dict></plist>
+            EOF
+          '';
         }
         // lib.optionalAttrs (system == "aarch64-darwin") {
           android-emulator-sdk = android.emulatorSdk system;
