@@ -154,7 +154,7 @@
         }
         // lib.optionalAttrs pkgs.stdenv.isDarwin {
           # The bundle as a macOS app: MacOS/ holds bin/, so ../lib still resolves.
-          app-bundle = pkgs.runCommand "logos-core-demo-app" { } ''
+          app-bundle = pkgs.runCommand "logos-core-demo-app" { nativeBuildInputs = [ pkgs.rcodesign ]; } ''
             contents="$out/Applications/Logos Core Demo.app/Contents"
             mkdir -p "$contents"
             cp -R ${self.packages.${system}.bundle}/bin "$contents/MacOS"
@@ -174,6 +174,8 @@
               <key>NSLocalNetworkUsageDescription</key><string>Logos Core Demo links to a Logos node on your network.</string>
             </dict></plist>
             EOF
+            # Ad hoc: sealed, so macOS runs it; not notarised.
+            rcodesign sign "$out/Applications/Logos Core Demo.app"
           '';
         }
         // lib.optionalAttrs (system == "aarch64-darwin") {
