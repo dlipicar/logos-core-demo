@@ -63,17 +63,21 @@ start() {
   }
 }
 JSON
+  # A second `daemon start` on one config dir starts a second daemon: stop first.
+  ctl daemon stop >/dev/null 2>&1 || true
   ctl daemon config set "$CONFIG_DIR/node-daemon.json" >/dev/null
   ctl daemon start --detach
   ctl module load blockchain_module >/dev/null
 
   # A devnet follower: stays in Bootstrapping, so it never proves or leads.
   local cfg
-  cfg=$(call generate_user_config "@$here/config/devnet-user-config.json" | jq -r '.result.value // .result')
-  if [ -z "$cfg" ] || [ "$cfg" = null ]; then
-    echo "generate_user_config gave no path (a second run keeps the first config)" >&2
+  cfg=$(call generate_user_config "@$here/config/devnet-user-config.json" \
+        | jq -r 'if .result.success == true then .result.value else empty end')
+  if [ -z "$cfg" ]; then
+    # A second run keeps the config (and keys) the first one wrote.
     cfg=$(find "$CONFIG_DIR" -name user_config.yaml -path '*blockchain_module*' | head -1)
   fi
+  [ -n "$cfg" ] || { echo "no node config" >&2; exit 1; }
   call merge_user_config "$cfg" "$cfg" "@$here/config/follower-mode.yaml" false false >/dev/null
   call start "$cfg" "" >/dev/null || true
   echo "node started with $cfg"
