@@ -1,0 +1,16 @@
+{
+  "name": "fake_blockchain",
+  "display_name": "Fake blockchain",
+  "version": "0.1.0",
+  "description": "Test double of blockchain_module: the methods the demo reads, and a newBlock a second. No network.",
+  "author": "Logos Core Team",
+  "type": "core",
+  "category": "example",
+  "interface": "universal",
+  "transport": "qt_remote_plain",
+  "concurrency": "multi",
+  "codegen": { "impl_header": "fake_blockchain_impl.h", "impl_class": "FakeBlockchainImpl" },
+  "main": "fake_blockchain_plugin",
+  "dependencies": [],
+  "nix": { "packages": { "build": [], "runtime": [] }, "external_libraries": [], "cmake": {} }
+}

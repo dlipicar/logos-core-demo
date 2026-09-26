@@ -1,0 +1,14 @@
+[package]
+name = "logos-core-demo-headless"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Logos Core Demo without a UI: link a daemon, import its node, read it"
+
+[[bin]]
+name = "logos-core-demo-headless"
+path = "src/main.rs"
+
+[dependencies]
+demo-core.workspace = true
+serde_json.workspace = true

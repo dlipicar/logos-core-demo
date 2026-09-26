@@ -1,0 +1,59 @@
+module blockchain_module {
+  version "0.0.999"
+  description "Logos blockchain node for logos-core"
+  category "blockchain"
+  depends []
+
+  method start(config_path: tstr, deployment: tstr) -> result
+  method stop() -> result
+  method subscribe_to_new_blocks() -> result
+  method subscribe_to_processed_blocks() -> result
+  method subscribe_to_lib_blocks() -> result
+  method does_state_exist() -> result
+  method purge_state() -> result
+  method generate_user_config(json_args: tstr) -> result
+  method update_user_config(user_config_path: tstr, keystore_path: tstr) -> result
+  method migrate_user_config(output_path: tstr, keystore_path: tstr) -> result
+  method migrate_user_config_0_1_2(new_config_path: tstr, old_config_path: tstr, keystore_path: tstr) -> result
+  method merge_user_config(source_path: tstr, destination_path: tstr, extra_yaml: tstr, source_insert_missing: bool, extra_insert_missing: bool) -> result
+  method participate(config_path: tstr, keystore_path: tstr, output_dir: tstr, external_address: tstr) -> result
+  method generate_key(user_config_path: tstr, keystore_path: tstr, key_type: tstr, key_title: tstr) -> result
+  method add_key(user_config_path: tstr, keystore_path: tstr, key_type: tstr, key_hex: tstr, key_title: tstr) -> result
+  method remove_key(user_config_path: tstr, keystore_path: tstr, key_title: tstr) -> result
+  method get_peer_id(config_path: tstr) -> result
+  method wallet_get_balance(address_hex: tstr) -> result
+  method wallet_transfer_funds(change_public_key: tstr, sender_addresses: [tstr], recipient_address: tstr, amount: tstr, optional_tip_hex: tstr) -> result
+  method wallet_get_known_addresses() -> result
+  method wallet_get_notes(wallet_address_hex: tstr, optional_tip_hex: tstr) -> result
+  method wallet_get_leader_aged_notes(optional_tip_hex: tstr) -> result
+  method leader_claim() -> result
+  method wallet_get_claimable_vouchers() -> result
+  method wallet_fund_tx(request_json: tstr) -> result
+  method submit_signed_transaction(signed_tx_json: tstr) -> result
+  method channel_deposit(channel_id_hex: tstr, funding_public_key_hex: tstr, amount: tstr, metadata_hex: tstr, optional_tip_hex: tstr) -> result
+  method channel_deposit_with_notes(channel_id_hex: tstr, input_note_id_hexes: [tstr], metadata_hex: tstr, change_public_key_hex: tstr, funding_public_key_hexes: [tstr], max_tx_fee: tstr, optional_tip_hex: tstr) -> result
+  method get_channel_state(channel_id_hex: tstr) -> result
+  method blend_join_as_core_node(locator: tstr, locked_note_id_hex: tstr) -> result
+  method blend_info() -> result
+  method get_chain_id() -> result
+  method get_network_info() -> result
+  method get_block(header_id_hex: tstr) -> result
+  method get_blocks(from_slot: uint, to_slot: uint) -> result
+  method get_transaction(tx_hash_hex: tstr) -> result
+  method get_cryptarchia_info() -> result
+  method get_block_events(header_id_hex: tstr) -> result
+  method get_time_info() -> result
+  method pow_start_mining() -> result
+  method pow_stop_mining() -> result
+  method pow_start_auto_claim() -> result
+  method pow_stop_auto_claim() -> result
+  method pow_claim(claim_address_hex: tstr) -> result
+  method pow_claimable_rewards() -> result
+  method pow_configure(config_path: tstr, config_json: tstr) -> result
+  method read_accounts(config_path: tstr) -> result
+  method read_pow_config(config_path: tstr) -> result
+
+  event newBlock(blockJson: tstr)
+  event processedBlock(eventJson: tstr)
+  event libBlock(blockInfoJson: tstr)
+}

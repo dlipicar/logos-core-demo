@@ -1,0 +1,18 @@
+{
+  "name": "bc_probe",
+  "display_name": "Blockchain probe",
+  "version": "0.1.0",
+  "description": "Reads the node's chain state by calling blockchain_module, local or imported from a peered runtime.",
+  "author": "Logos Core Team",
+  "type": "core",
+  "category": "example",
+  "interface": "universal",
+  "transport": "qt_remote_plain",
+  "codegen": { "impl_header": "bc_probe_impl.h", "impl_class": "BcProbeImpl" },
+  "main": "bc_probe_plugin",
+  "dependencies": ["blockchain_module"],
+  "dependency_overrides": {
+    "blockchain_module": { "file": "contracts/blockchain_module.lidl" }
+  },
+  "nix": { "packages": { "build": [], "runtime": [] }, "external_libraries": [], "cmake": {} }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "hello_module",
+  "display_name": "Hello",
+  "version": "0.1.0",
+  "description": "Answers ping and echo, and emits an event on fire: the local module of the Logos Core Demo.",
+  "author": "Logos Core Team",
+  "type": "core",
+  "category": "example",
+  "interface": "universal",
+  "transport": "qt_remote_plain",
+  "codegen": { "impl_header": "hello_module_impl.h", "impl_class": "HelloModuleImpl" },
+  "main": "hello_module_plugin",
+  "dependencies": [],
+  "nix": { "packages": { "build": [], "runtime": [] }, "external_libraries": [], "cmake": {} }
+}
