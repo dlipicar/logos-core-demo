@@ -72,7 +72,12 @@ export component AppWindow inherits Window {
     callback remove-import();
     callback probe-node();
 
+    // A phone draws under its status and navigation bars; elsewhere these are 0.
     TabWidget {
+        x: root.safe-area-insets.left;
+        y: root.safe-area-insets.top;
+        width: root.width - root.safe-area-insets.left - root.safe-area-insets.right;
+        height: root.height - root.safe-area-insets.top - root.safe-area-insets.bottom;
         Tab {
             title: "Runtime";
             ScrollView {
