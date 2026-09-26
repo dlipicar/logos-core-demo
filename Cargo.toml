@@ -8,6 +8,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-logos-rust-sdk = { git = "https://github.com/logos-co/logos-rust-sdk", rev = "187ac789a6bb9b825dcdb299fcaa7f4cef61184e", features = ["host"] }
+logos-rust-sdk = { git = "https://github.com/logos-co/logos-rust-sdk", rev = "d52f5bba3732409bd3c06b05c2ac042ba545e1a9", features = ["host"] }
 serde_json = "1"
 demo-core = { path = "demo-core" }

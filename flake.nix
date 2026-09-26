@@ -2,10 +2,10 @@
   description = "Logos Core Demo: Qt-free apps that run a Logos runtime and use a node on a peered one";
 
   inputs = {
-    logos-nix.url = "github:logos-co/logos-nix";
+    logos-nix.url = "github:logos-co/logos-nix/feat/standalone-apps";
     nixpkgs.follows = "logos-nix/nixpkgs";
     # Builds the demo's modules; its protocol is the one the runtime speaks.
-    logos-module-builder.url = "github:logos-co/logos-module-builder/feat/peering";
+    logos-module-builder.url = "github:logos-co/logos-module-builder/feat/standalone-apps";
     # The runtime the apps spawn (logos_runtime, the plain hosts, the bundled
     # modules) and the daemon the node runs in.
     logos-logoscore-cli.url = "github:logos-co/logos-logoscore-cli/feat/standalone-apps";
