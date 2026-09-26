@@ -1,0 +1,29 @@
+[package]
+name = "logos-core-demo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Logos Core Demo: a Qt-free Slint app that runs a Logos runtime and uses a node on a peered one"
+
+[lib]
+name = "logos_core_demo"
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "logos-core-demo"
+path = "src/main.rs"
+
+[dependencies]
+demo-core.workspace = true
+serde_json.workspace = true
+# No default features: they include Slint's Qt backend, and this app is Qt-free.
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "accessibility", "renderer-femtovg", "renderer-software"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+slint = { version = "1.18", default-features = false, features = ["backend-winit"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+slint = { version = "1.18", default-features = false, features = ["backend-android-activity-06"] }
+
+[build-dependencies]
+slint-build = "1"

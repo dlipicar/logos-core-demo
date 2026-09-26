@@ -4,6 +4,7 @@
 //!       [--name NAME] [--hello]
 //!       [--link-local FILE | --invite FILE | --pair HOST:PORT]
 //!       [--remote-module NAME] [--watch SECONDS] [--expect-blocks N] [--probe]
+//!       [--whoami] [--caller-gate] [--expect-denied] [--await-restart SECONDS]
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,6 +37,10 @@ struct Args {
     watch: u64,
     expect_blocks: u64,
     probe: bool,
+    whoami: bool,
+    caller_gate: bool,
+    expect_denied: bool,
+    await_restart: u64,
 }
 
 fn parse_args() -> Args {
@@ -53,6 +58,10 @@ fn parse_args() -> Args {
         watch: 0,
         expect_blocks: 0,
         probe: false,
+        whoami: false,
+        caller_gate: false,
+        expect_denied: false,
+        await_restart: 0,
     };
     let mut it = std::env::args().skip(1);
     while let Some(flag) = it.next() {
@@ -75,6 +84,10 @@ fn parse_args() -> Args {
             "--watch" => args.watch = value().parse().unwrap_or(0),
             "--expect-blocks" => args.expect_blocks = value().parse().unwrap_or(0),
             "--probe" => args.probe = true,
+            "--whoami" => args.whoami = true,
+            "--caller-gate" => args.caller_gate = true,
+            "--expect-denied" => args.expect_denied = true,
+            "--await-restart" => args.await_restart = value().parse().unwrap_or(0),
             other => fail("args", format!("unknown flag {other}")),
         }
     }
@@ -85,11 +98,17 @@ fn main() {
     let args = parse_args();
     let blocks = Arc::new(AtomicU64::new(0));
     let fired = Arc::new(AtomicU64::new(0));
-    let (b, f) = (blocks.clone(), fired.clone());
+    let errors = Arc::new(AtomicU64::new(0));
+    let (b, f, e) = (blocks.clone(), fired.clone(), errors.clone());
     let sink: demo_core::EventSink = Arc::new(move |event| match event {
         DemoEvent::NewBlock { count, .. } => b.store(count, Ordering::Relaxed),
         DemoEvent::HelloFired { count, .. } => f.store(count as u64, Ordering::Relaxed),
-        DemoEvent::ImportState { name, state, reason } => emit("import_state", json!({"name": name, "state": state, "reason": reason})),
+        DemoEvent::ImportState { name, state, reason } => {
+            if state == "error" {
+                e.fetch_add(1, Ordering::Relaxed);
+            }
+            emit("import_state", json!({"name": name, "state": state, "reason": reason}))
+        }
         DemoEvent::RuntimeExited(reason) => emit("runtime_exited", json!(reason)),
         _ => {}
     });
@@ -130,8 +149,43 @@ fn main() {
     let exports = demo.peer_exports(&peer).unwrap_or_else(|e| fail("peer_exports", e));
     emit("peer_exports", exports);
     demo.import_node(&peer, &args.remote_module).unwrap_or_else(|e| fail("import", e));
+
+    if args.expect_denied {
+        // The peer's policy does not name its module for this runtime: the
+        // import never becomes usable, and every call is refused.
+        std::thread::sleep(Duration::from_secs(3));
+        let reply = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        let state = demo.import_state(demo_core::NODE).unwrap_or_default();
+        emit("denied", json!({ "refused": reply.is_err(), "reply": format!("{reply:?}"), "import": format!("{state:?}") }));
+        if reply.is_ok() {
+            fail("denied", "the call went through".into());
+        }
+        demo.stop();
+        return;
+    }
+
     demo.wait_import_ready(demo_core::NODE, Duration::from_secs(60)).unwrap_or_else(|e| fail("import", e));
     emit("import_ready", json!(demo_core::NODE));
+
+    if args.caller_gate {
+        // The import admits only the callers it names, checked when a caller's
+        // session to the peer opens: the app's first call is refused while
+        // bc_probe reads the node.
+        demo.import_node_for(&peer, &args.remote_module, &["bc_probe"]).unwrap_or_else(|e| fail("callers", e));
+        let shell = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        let probe = demo.probe().unwrap_or_else(|e| fail("callers", e));
+        emit("callers", json!({ "shell_refused": shell.is_err(), "probe_ok": probe.get("ok") }));
+        if shell.is_ok() || probe.get("ok").and_then(Value::as_bool) != Some(true) {
+            fail("callers", format!("shell {shell:?}, probe {probe}"));
+        }
+        demo.import_node(&peer, &args.remote_module).unwrap_or_else(|e| fail("callers", e));
+    }
+
+    if args.whoami {
+        let who = demo.core().call(demo_core::NODE, "whoami", json!([]), Duration::from_secs(20))
+            .unwrap_or_else(|e| fail("whoami", e.to_string()));
+        emit("whoami", who);
+    }
 
     let snapshot = demo.read_node(None);
     emit("node", json!({
@@ -164,6 +218,30 @@ fn main() {
         emit("blocks", json!({ "new_block_events": seen }));
         if seen < args.expect_blocks {
             fail("blocks", format!("{seen} newBlock events, wanted {}", args.expect_blocks));
+        }
+    }
+    if args.await_restart > 0 {
+        // Something else restarts the peer: the import goes to error and back,
+        // and its events resume.
+        demo.start_node_watch(Duration::from_secs(2)).unwrap_or_else(|e| fail("restart", e));
+        emit("awaiting_restart", Value::Null);
+        let deadline = Instant::now() + Duration::from_secs(args.await_restart);
+        while errors.load(Ordering::Relaxed) == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        if errors.load(Ordering::Relaxed) == 0 {
+            fail("restart", "the import never reported the peer's loss".into());
+        }
+        demo.wait_import_ready(demo_core::NODE, deadline.saturating_duration_since(Instant::now()))
+            .unwrap_or_else(|e| fail("restart", e));
+        let before = blocks.load(Ordering::Relaxed);
+        while blocks.load(Ordering::Relaxed) < before + 2 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let after = blocks.load(Ordering::Relaxed);
+        emit("restart", json!({ "events_before": before, "events_after": after }));
+        if after < before + 2 {
+            fail("restart", "events did not resume".into());
         }
     }
     demo.stop();

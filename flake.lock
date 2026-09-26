@@ -126835,6 +126835,10 @@
         "nixpkgs": [
           "logos-nix",
           "nixpkgs"
+        ],
+        "rust-overlay": [
+          "logos-module-builder",
+          "rust-overlay"
         ]
       }
     },

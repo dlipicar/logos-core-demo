@@ -12,9 +12,11 @@
     # Host embedding and the client generator.
     logos-rust-sdk.url = "github:logos-co/logos-rust-sdk/feat/standalone-apps";
     logos-rust-sdk.inputs.logos-nix.follows = "logos-nix";
+    # Slint needs a newer rustc than the nixpkgs pin ships.
+    rust-overlay.follows = "logos-module-builder/rust-overlay";
   };
 
-  outputs = { self, nixpkgs, logos-nix, logos-module-builder, logos-logoscore-cli, logos-rust-sdk }:
+  outputs = { self, nixpkgs, logos-nix, logos-module-builder, logos-logoscore-cli, logos-rust-sdk, rust-overlay }:
     let
       lib = nixpkgs.lib;
       systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
@@ -48,11 +50,55 @@
           cp -rL ${ctl}/modules/. $out/modules/
           chmod -R u+w $out
         '';
+      rustPlatformFor = pkgs:
+        let toolchain = (pkgs.extend (import rust-overlay)).rust-bin.stable."1.96.0".default;
+        in pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; };
+
+      # What winit and femtovg open at run time on Linux.
+      linuxGuiLibs = pkgs: with pkgs; [
+        libxkbcommon wayland libGL fontconfig freetype
+        xorg.libX11 xorg.libXcursor xorg.libXi xorg.libXrandr
+      ];
+
+      # One crate of the workspace, linked against the runtime it will spawn.
+      mkRustPackage = { pkgs, system, crate, bin, meta ? { } }:
+        let runtime = self.packages.${system}.runtime; in
+        (rustPlatformFor pkgs).buildRustPackage {
+          pname = bin;
+          version = "0.1.0";
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./demo-core ./headless ./app ];
+          };
+          cargoLock = { lockFile = ./Cargo.lock; allowBuiltinFetchGit = true; };
+          cargoBuildFlags = [ "-p" crate ];
+          cargoTestFlags = [ "-p" "demo-core" ];
+          env.LOGOS_HOST_LIB_DIR = "${runtime}/lib";
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = lib.optionals pkgs.stdenv.isLinux (linuxGuiLibs pkgs);
+          # The runtime and the demo's modules, where the app looks for them.
+          postInstall = ''
+            mkdir -p $out/share/logos-core-demo/modules
+            ln -s ${runtime} $out/share/logos-core-demo/runtime
+            cp -r ${modules.hello_module.packages.${system}.install}/modules/. $out/share/logos-core-demo/modules/
+            cp -r ${modules.bc_probe.packages.${system}.install}/modules/. $out/share/logos-core-demo/modules/
+          '';
+          postFixup = lib.optionalString pkgs.stdenv.isLinux ''
+            patchelf --add-rpath ${lib.makeLibraryPath (linuxGuiLibs pkgs)} $out/bin/${bin}
+          '';
+          inherit meta;
+        };
     in
     {
       packages = forAllSystems ({ pkgs, system }:
         {
           runtime = runtimePayload { inherit pkgs system; };
+          app = mkRustPackage { inherit pkgs system; crate = "logos-core-demo"; bin = "logos-core-demo";
+                                meta.mainProgram = "logos-core-demo"; };
+          headless = mkRustPackage { inherit pkgs system; crate = "logos-core-demo-headless";
+                                     bin = "logos-core-demo-headless";
+                                     meta.mainProgram = "logos-core-demo-headless"; };
+          default = self.packages.${system}.app;
           # The generated clients, as committed under demo-core/src/clients.
           clients = logos-rust-sdk.lib.mkClients { inherit system; lidls = contracts system; };
           daemon = logos-logoscore-cli.packages.${system}.ctl;
@@ -63,6 +109,22 @@
         }) modules);
 
       checks = forAllSystems ({ pkgs, system }: {
+        # Two runtimes on one machine: a daemon exports fake_blockchain and the
+        # headless app links, imports, reads, probes, survives a restart, and is
+        # refused where the peer grants nothing.
+        e2e = pkgs.runCommand "logos-core-demo-e2e" {
+          nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.python3 pkgs.coreutils ];
+          CTL = "${self.packages.${system}.daemon}/bin/logosctl";
+          HEADLESS = "${self.packages.${system}.headless}/bin/logos-core-demo-headless";
+          FAKE = "${self.packages.${system}.fake_blockchain}";
+          APP_HOME = "${self.packages.${system}.headless}/share/logos-core-demo";
+        } ''
+          export HOME=$TMPDIR/home
+          mkdir -p $HOME
+          bash ${./tests/e2e.sh} > $TMPDIR/e2e.log 2>&1 || { tail -80 $TMPDIR/e2e.log; exit 1; }
+          grep -v '^\[20' $TMPDIR/e2e.log
+          cp $TMPDIR/e2e.log $out
+        '';
         clients-up-to-date = logos-rust-sdk.lib.clientsUpToDate {
           inherit system;
           lidls = contracts system;

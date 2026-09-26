@@ -1,0 +1,217 @@
+import { Button, LineEdit, TabWidget, GroupBox, ScrollView, VerticalBox, HorizontalBox, TextEdit, StandardListView } from "std-widgets.slint";
+
+export struct PeerRow {
+    runtime_id: string,
+    name: string,
+    display_id: string,
+    status: string,
+}
+
+component Row inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    spacing: 8px;
+    Text { text: root.label; color: #6b7280; min-width: 120px; }
+    Text { text: root.value; wrap: word-wrap; horizontal-stretch: 1; }
+}
+
+export component AppWindow inherits Window {
+    title: "Logos Core Demo";
+    preferred-width: 520px;
+    preferred-height: 760px;
+
+    // Runtime
+    in property <string> runtime-state: "STOPPED";
+    in property <bool> busy: false;
+    in property <string> modules-text;
+    in property <string> processes-text;
+    in property <string> log-text;
+
+    // Local module
+    in property <string> ping-result: "-";
+    in property <string> last-event: "-";
+    in property <string> methods-text;
+
+    // Peering
+    in property <string> display-id: "-";
+    in-out property <string> local-invite-path;
+    in-out property <string> invite-text;
+    in-out property <string> pair-host;
+    in-out property <string> pair-port: "7443";
+    in property <string> pair-code;
+    in property <string> connect-status: "Not linked";
+    in property <[PeerRow]> peers;
+    in-out property <string> remote-module: "blockchain_module";
+    in property <bool> desktop: true;
+
+    // Node
+    in property <string> import-state: "not imported";
+    in property <string> chain-id: "-";
+    in property <string> chain-mode: "-";
+    in property <string> chain-height: "-";
+    in property <string> slots: "-";
+    in property <string> lib-slot: "-";
+    in property <string> network: "-";
+    in property <string> new-blocks: "0";
+    in property <string> last-block: "-";
+    in property <string> probe: "-";
+    in property <string> node-error;
+
+    callback start-runtime();
+    callback stop-runtime();
+    callback load-hello();
+    callback ping();
+    callback fire();
+    callback methods();
+    callback link-local();
+    callback redeem-invite();
+    callback pair();
+    callback confirm-pair();
+    callback refresh-peers();
+    callback import-node(string);
+    callback remove-import();
+    callback probe-node();
+
+    TabWidget {
+        Tab {
+            title: "Runtime";
+            ScrollView {
+                VerticalBox {
+                    alignment: start;
+                    Row { label: "Runtime"; value: root.runtime-state; }
+                    HorizontalBox {
+                        Button { text: "Start"; enabled: !root.busy && root.runtime-state != "RUNNING"; clicked => { root.start-runtime(); } }
+                        Button { text: "Stop"; enabled: !root.busy && root.runtime-state == "RUNNING"; clicked => { root.stop-runtime(); } }
+                    }
+                    GroupBox {
+                        title: "Modules";
+                        Text { text: root.modules-text; wrap: word-wrap; }
+                    }
+                    GroupBox {
+                        title: "Processes";
+                        Text { text: root.processes-text; wrap: word-wrap; font-size: 11px; }
+                    }
+                    GroupBox {
+                        title: "Log";
+                        Text { text: root.log-text; wrap: word-wrap; font-size: 11px; }
+                    }
+                }
+            }
+        }
+        Tab {
+            title: "Local";
+            ScrollView {
+                VerticalBox {
+                    alignment: start;
+                    Text { text: "hello_module runs in this app's own runtime."; wrap: word-wrap; }
+                    HorizontalBox {
+                        Button { text: "Load hello"; enabled: root.runtime-state == "RUNNING"; clicked => { root.load-hello(); } }
+                        Button { text: "Ping"; enabled: root.runtime-state == "RUNNING"; clicked => { root.ping(); } }
+                        Button { text: "Fire"; enabled: root.runtime-state == "RUNNING"; clicked => { root.fire(); } }
+                        Button { text: "Methods"; enabled: root.runtime-state == "RUNNING"; clicked => { root.methods(); } }
+                    }
+                    Row { label: "Ping"; value: root.ping-result; }
+                    Row { label: "Last event"; value: root.last-event; }
+                    Text { text: root.methods-text; wrap: word-wrap; font-size: 11px; }
+                }
+            }
+        }
+        Tab {
+            title: "Connect";
+            ScrollView {
+                VerticalBox {
+                    alignment: start;
+                    Row { label: "This runtime"; value: root.display-id; }
+                    Row { label: "Status"; value: root.connect-status; }
+                    if root.desktop: GroupBox {
+                        title: "A daemon on this computer";
+                        VerticalBox {
+                            LineEdit { text <=> root.local-invite-path; placeholder-text: "~/.logosctl/peering/local-invite"; }
+                            Button { text: "Link"; enabled: root.runtime-state == "RUNNING" && !root.busy; clicked => { root.link-local(); } }
+                        }
+                    }
+                    GroupBox {
+                        title: "Another computer: invite";
+                        VerticalBox {
+                            TextEdit { text <=> root.invite-text; min-height: 70px; wrap: char-wrap; }
+                            Button { text: "Redeem invite"; enabled: root.runtime-state == "RUNNING" && !root.busy; clicked => { root.redeem-invite(); } }
+                        }
+                    }
+                    GroupBox {
+                        title: "Another computer: pairing code";
+                        VerticalBox {
+                            HorizontalBox {
+                                LineEdit { text <=> root.pair-host; placeholder-text: "host"; horizontal-stretch: 3; }
+                                LineEdit { text <=> root.pair-port; placeholder-text: "port"; horizontal-stretch: 1; }
+                            }
+                            HorizontalBox {
+                                Button { text: "Pair"; enabled: root.runtime-state == "RUNNING" && !root.busy; clicked => { root.pair(); } }
+                                Button { text: "Codes match"; enabled: root.pair-code != "" && !root.busy; clicked => { root.confirm-pair(); } }
+                            }
+                            if root.pair-code != "": Text {
+                                text: "Code " + root.pair-code + ": check the other screen shows the same, then accept it there.";
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Tab {
+            title: "Peers";
+            ScrollView {
+                VerticalBox {
+                    alignment: start;
+                    HorizontalBox {
+                        Button { text: "Refresh"; enabled: root.runtime-state == "RUNNING"; clicked => { root.refresh-peers(); } }
+                        LineEdit { text <=> root.remote-module; placeholder-text: "module on the peer"; }
+                    }
+                    for peer in root.peers: GroupBox {
+                        title: peer.name;
+                        VerticalBox {
+                            Row { label: "Display ID"; value: peer.display-id; }
+                            Row { label: "Status"; value: peer.status; }
+                            Button { text: "Use its node"; enabled: !root.busy; clicked => { root.import-node(peer.runtime-id); } }
+                        }
+                    }
+                    if root.peers.length == 0: Text { text: "No paired runtimes yet."; color: #6b7280; }
+                }
+            }
+        }
+        Tab {
+            title: "Node";
+            ScrollView {
+                VerticalBox {
+                    alignment: start;
+                    Row { label: "Import"; value: root.import-state; }
+                    Row { label: "Chain"; value: root.chain-id + "  mode " + root.chain-mode; }
+                    Row { label: "Height"; value: root.chain-height; }
+                    Row { label: "Tip slot"; value: root.slots; }
+                    Row { label: "LIB slot"; value: root.lib-slot; }
+                    Row { label: "Network"; value: root.network; }
+                    Row { label: "newBlock events"; value: root.new-blocks; }
+                    Row { label: "Last block"; value: root.last-block; }
+                    Row { label: "via bc_probe"; value: root.probe; }
+                    if root.node-error != "": Text { text: root.node-error; color: #b91c1c; wrap: word-wrap; }
+                    HorizontalBox {
+                        Button { text: "Read via bc_probe"; enabled: root.import-state == "ready" && !root.busy; clicked => { root.probe-node(); } }
+                        Button { text: "Forget node"; enabled: root.import-state != "not imported" && !root.busy; clicked => { root.remove-import(); } }
+                    }
+                }
+            }
+        }
+        Tab {
+            title: "About";
+            ScrollView {
+                VerticalBox {
+                    alignment: start;
+                    Text {
+                        wrap: word-wrap;
+                        text: "Logos Core Demo runs a Logos runtime of its own and uses a blockchain node that runs in another Logos instance (a logoscore daemon), on this computer or another one. No Qt.\n\nA paired app can call every method of the node module it imports, including stopping the node and its wallet and key methods: peering grants access per module, not per method. Pair only with a daemon you trust with that.";
+                    }
+                    Text { text: "Built with Slint (royalty-free licence 2.0)."; color: #6b7280; }
+                }
+            }
+        }
+    }
+}

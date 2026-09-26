@@ -303,10 +303,15 @@ impl Demo {
     /// Imports the peer's node module as this runtime's `blockchain_module`,
     /// callable by this app and by bc_probe, with its events.
     pub fn import_node(&self, peer: &str, remote_module: &str) -> Result<(), String> {
+        self.import_node_for(peer, remote_module, &[self.core.shell_name(), PROBE])
+    }
+
+    /// The same import, callable only by `callers` of this runtime.
+    pub fn import_node_for(&self, peer: &str, remote_module: &str, callers: &[&str]) -> Result<(), String> {
         let config: BTreeMap<String, Value> = [
             ("from", json!(peer)),
             ("module", json!(remote_module)),
-            ("allowed_callers", json!([self.core.shell_name(), PROBE])),
+            ("allowed_callers", json!(callers)),
             ("events", json!(true)),
             ("prefer", json!("remote")),
         ]
