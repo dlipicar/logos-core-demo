@@ -68,13 +68,20 @@ out="$work/a2.jsonl"
 app a2 --link-local "$work/b-invite" --await-restart 120 > "$out" &
 pid=$!
 for _ in $(seq 300); do grep -q awaiting_restart "$out" 2>/dev/null && break; sleep 0.2; done
+grep -q awaiting_restart "$out" || { echo "the app never linked"; cat "$out"; exit 1; }
+echo "-- stopping the daemon"
 daemon daemon stop >/dev/null
 # Down until the app has seen the loss (the facade checks its peer every 15 s).
 for _ in $(seq 300); do grep -q '"state":"error"' "$out" && break; sleep 0.2; done
-grep -q '"state":"error"' "$out"
+grep -q '"state":"error"' "$out" || { echo "the app never saw the daemon go"; cat "$out"; exit 1; }
+echo "-- restarting the daemon"
 daemon daemon start --detach >/dev/null
 daemon module load fake_blockchain >/dev/null
-wait "$pid"
+wait "$pid" || {
+  echo "the app did not recover"; cat "$out"
+  echo "-- the daemon's log"; tail -80 "$work"/b/logs/*.log 2>/dev/null
+  exit 1
+}
 cat "$out"
 [ "$(step "$out" restart | jq -r .events_after)" -ge 2 ]
 
