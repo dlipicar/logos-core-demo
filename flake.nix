@@ -58,6 +58,18 @@
         let toolchain = (pkgs.extend (import rust-overlay)).rust-bin.stable."1.96.0".default;
         in pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; };
 
+      rustSrc = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./demo-core ./headless ./app ];
+      };
+      android = import ./nix/android.nix {
+        inherit lib logos-nix nixpkgs rust-overlay;
+        src = rustSrc;
+      };
+      # The stack's Android outputs, through the runtime's own pins.
+      cli = logos-logoscore-cli.inputs;
+      androidLiblogos = cli.logos-liblogos.packages.aarch64-android;
+
       # What winit and femtovg open at run time on Linux.
       linuxGuiLibs = pkgs: with pkgs; [
         libxkbcommon wayland libGL fontconfig freetype
@@ -70,10 +82,7 @@
         (rustPlatformFor pkgs).buildRustPackage {
           pname = bin;
           version = "0.1.0";
-          src = lib.fileset.toSource {
-            root = ./.;
-            fileset = lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./demo-core ./headless ./app ];
-          };
+          src = rustSrc;
           cargoLock = { lockFile = ./Cargo.lock; allowBuiltinFetchGit = true; };
           cargoBuildFlags = [ "-p" crate ];
           cargoTestFlags = [ "-p" "demo-core" ];
@@ -124,10 +133,19 @@
           clients = logos-rust-sdk.lib.mkClients { inherit system; lidls = contracts system; };
           daemon = logos-logoscore-cli.packages.${system}.ctl;
         }
+        // lib.optionalAttrs (system == "aarch64-darwin") {
+          android-emulator-sdk = android.emulatorSdk system;
+        }
         // lib.concatMapAttrs (name: module: {
           ${name} = module.packages.${system}.install;
           "${name}-lidl" = module.packages.${system}.lidl;
-        }) modules);
+        }) modules)
+        // {
+          # Built on the build system logos-nix names for Android.
+          aarch64-android = {
+            app-lib = android.appLib { hostLibDir = "${androidLiblogos.logos-liblogos-lib}/lib"; };
+          };
+        };
 
       checks = forAllSystems ({ pkgs, system }: {
         # Two runtimes on one machine: a daemon exports fake_blockchain and the

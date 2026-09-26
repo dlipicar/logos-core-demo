@@ -24,6 +24,7 @@ slint = { version = "1.18", default-features = false, features = ["backend-winit
 
 [target.'cfg(target_os = "android")'.dependencies]
 slint = { version = "1.18", default-features = false, features = ["backend-android-activity-06"] }
+libc = "0.2"
 
 [build-dependencies]
 slint-build = "1"

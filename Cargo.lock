@@ -2589,6 +2589,7 @@ name = "logos-core-demo"
 version = "0.1.0"
 dependencies = [
  "demo-core",
+ "libc",
  "serde_json",
  "slint",
  "slint-build",

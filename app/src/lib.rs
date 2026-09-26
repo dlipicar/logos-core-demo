@@ -12,6 +12,9 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel, Weak};
 
 slint::include_modules!();
 
+#[cfg(target_os = "android")]
+mod android;
+
 const SHELL: &str = "core_demo";
 
 enum Cmd {
@@ -75,6 +78,10 @@ fn default_local_invite() -> String {
 }
 
 fn peer_name() -> String {
+    #[cfg(target_os = "android")]
+    if let Some(model) = android::device_model() {
+        return format!("Logos Core Demo on {model}");
+    }
     let host = std::env::var("HOSTNAME")
         .ok()
         .or_else(|| std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_string()))
