@@ -70,8 +70,16 @@ adb install -r result
 The APK carries `logos_runtime`, the module hosts, every plugin and library as
 `lib*.so` files (the only files Android extracts and lets an app execute), and
 the module directories as assets. The app lays those out in its storage when it
-starts. Link a daemon with an invite or a pairing code. From the emulator, the
-host computer is `10.0.2.2`: replace the host in an invite with it.
+starts.
+
+Link a daemon by pairing code, or with an invite. An invite opens the app as a
+`logos-pair:` link, so scanning a QR code of it with the camera fills it in
+(`scripts/node-daemon.sh invite | jq -r .invite | qrencode -t ansiutf8`). From the
+emulator the host computer is `10.0.2.2`:
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d "logos-pair:…@10.0.2.2:7443" co.logos.coredemo
+```
 
 `packages.aarch64-android.*` build on x86_64-linux, which logos-nix names as
 Android's build system.
