@@ -51,7 +51,14 @@ Only pair apps you trust.
 nix run .#app                         # macOS or Linux
 nix run .#headless -- --help
 nix run .#bc-watch -- --help
+nix build .#bundle                    # a directory that runs without Nix: bin/logos-core-demo
+nix build .#app-bundle                # macOS: Logos Core Demo.app, ad hoc signed
 ```
+
+The bundle holds both apps and the runtime's executables in `bin/`, their
+libraries in `lib/`, and the bundled and demo modules in `modules/` and
+`app-modules/`. Copy it anywhere. On Linux the app takes X11/Wayland and GL
+from the system.
 
 **Runtime** starts the app's own runtime (capability, modules_state, peering, and
 the demo's modules). **Connect** links the daemon on this computer through its
