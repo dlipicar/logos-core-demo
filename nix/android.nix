@@ -117,5 +117,15 @@ in
         value = "${m.dir}/${m.name}_plugin.so";
       }) modules);
       permissions = [ "android.permission.INTERNET" "android.permission.ACCESS_NETWORK_STATE" ];
+      # An invite opens the app (a QR code scanned by the camera, a link).
+      launchMode = "singleTask";
+      intentFilters = ''
+        <intent-filter>
+          <action android:name="android.intent.action.VIEW"/>
+          <category android:name="android.intent.category.DEFAULT"/>
+          <category android:name="android.intent.category.BROWSABLE"/>
+          <data android:scheme="logos-pair"/>
+        </intent-filter>
+      '';
     };
 }

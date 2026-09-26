@@ -91,9 +91,17 @@ fn peer_name() -> String {
 }
 
 pub fn run(paths: Paths, desktop: bool) -> Result<(), slint::PlatformError> {
+    run_with(paths, desktop, None)
+}
+
+/// `invite`: one the app was opened with, ready to redeem once the runtime runs.
+pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>) -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     ui.set_desktop(desktop);
     ui.set_local_invite_path(default_local_invite().into());
+    if let Some(invite) = invite {
+        ui.set_invite_text(invite.into());
+    }
 
     let (tx, rx) = channel::<Cmd>();
     let weak = ui.as_weak();

@@ -37,8 +37,29 @@ fn start(app: AndroidApp) -> Result<(), String> {
         data: files.clone(),
         tmp: cache,
     };
+    let invite = launch_invite(&app);
     slint::android::init(app).map_err(|e| e.to_string())?;
-    crate::run(paths, false).map_err(|e| e.to_string())
+    crate::run_with(paths, false, invite).map_err(|e| e.to_string())
+}
+
+/// The logos-pair: URI the app was opened with (a scanned QR code), if any. Only
+/// a cold start sees it: NativeActivity does not forward onNewIntent.
+fn launch_invite(app: &AndroidApp) -> Option<String> {
+    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr() as *mut jni::sys::JavaVM) }.ok()?;
+    let read = || -> jni::errors::Result<Option<String>> {
+        let mut env = vm.attach_current_thread_permanently()?;
+        let activity = unsafe { jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
+        let intent = env.call_method(&activity, "getIntent", "()Landroid/content/Intent;", &[])?.l()?;
+        if intent.is_null() {
+            return Ok(None);
+        }
+        let data = env.call_method(&intent, "getDataString", "()Ljava/lang/String;", &[])?.l()?;
+        if data.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(env.get_string(&jni::objects::JString::from(data))?.into()))
+    };
+    read().ok().flatten().filter(|uri| uri.starts_with("logos-pair:"))
 }
 
 /// This library's own directory: where the package manager extracted the APK's libs.
