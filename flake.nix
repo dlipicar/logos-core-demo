@@ -142,8 +142,35 @@
         }) modules)
         // {
           # Built on the build system logos-nix names for Android.
-          aarch64-android = {
+          aarch64-android = rec {
             app-lib = android.appLib { hostLibDir = "${androidLiblogos.logos-liblogos-lib}/lib"; };
+            apk =
+              let
+                a = android.apkgs;
+                runtime = androidLiblogos.logos-liblogos-bin;
+                peering = cli.logos-peering.packages.aarch64-android;
+                bundled = name: version: { group = "bundled"; inherit name version; dir = "${runtime}/modules/${name}"; };
+                fromPackage = group: name: pkg: { inherit group name; version = "0.1.0"; dir = "${pkg}/lib"; };
+              in
+              android.apk {
+                appLib = app-lib;
+                executables = {
+                  logos_runtime = "${runtime}/bin/logos_runtime";
+                  logos_host_plain = "${runtime}/bin/logos_host_plain";
+                  logos_host_remote = "${peering.logos_host_remote}/bin/logos_host_remote";
+                };
+                libraries = [ ];
+                modules = [
+                  (bundled "capability_module" "1.0.0")
+                  (bundled "modules_state" "0.1.0")
+                  (fromPackage "bundled" "peering_identity" peering.peering_identity)
+                  (fromPackage "bundled" "peering_module" peering.peering_module)
+                  (fromPackage "app" "hello_module" modules.hello_module.packages.aarch64-android.default)
+                  (fromPackage "app" "bc_probe" modules.bc_probe.packages.aarch64-android.default)
+                ];
+                searchPath = [ "${runtime}/lib" "${peering.libpeering}/lib" ]
+                  ++ map (p: "${lib.getLib p}/lib") [ a.boost a.openssl a.spdlog a.fmt a.libsodium a.zstd a.libiconv a.libblake3 ];
+              };
           };
         };
 
