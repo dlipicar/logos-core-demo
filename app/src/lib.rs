@@ -415,10 +415,10 @@ impl Worker {
             }
             DemoEvent::NewBlock { count, event } => {
                 let last = match event {
-                    BlockEvent::Block { id, height } => format!(
+                    BlockEvent::Block { slot, parent } => format!(
                         "{}{}",
-                        height.map(|h| format!("#{h} ")).unwrap_or_default(),
-                        id.map(|i| i.chars().take(16).collect::<String>()).unwrap_or_default()
+                        slot.map(|s| format!("slot {s}  ")).unwrap_or_default(),
+                        parent.map(|p| format!("parent {}…", p.chars().take(12).collect::<String>())).unwrap_or_default()
                     ),
                     BlockEvent::StreamEnded => "stream ended, re-subscribing".into(),
                 };

@@ -86,13 +86,14 @@ impl NodeSnapshot {
 /// the node's stream ended.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockEvent {
-    Block { id: Option<String>, height: Option<i64> },
+    /// A header carries its slot and its parent's id; blocks have no height.
+    Block { slot: Option<i64>, parent: Option<String> },
     StreamEnded,
 }
 
 pub fn block_event(block_json: &str) -> BlockEvent {
     let Ok(outer) = serde_json::from_str::<Value>(block_json) else {
-        return BlockEvent::Block { id: None, height: None };
+        return BlockEvent::Block { slot: None, parent: None };
     };
     if outer.is_null() {
         return BlockEvent::StreamEnded;
@@ -104,8 +105,8 @@ pub fn block_event(block_json: &str) -> BlockEvent {
     };
     let header = block.get("header").unwrap_or(&block);
     BlockEvent::Block {
-        id: header.get("id").and_then(Value::as_str).map(str::to_string),
-        height: header.get("height").and_then(Value::as_i64),
+        slot: header.get("slot").and_then(Value::as_i64),
+        parent: header.get("parent_block").and_then(Value::as_str).map(str::to_string),
     }
 }
 
@@ -139,10 +140,10 @@ mod tests {
 
     #[test]
     fn block_events_decode_both_shapes_and_the_end_of_the_stream() {
-        let block = json!({"header": {"id": "cafe", "height": 9}}).to_string();
+        let block = json!({"header": {"version": "Bedrock", "parent_block": "cafe", "slot": 9}}).to_string();
         let event = json!({"block": block}).to_string();
-        assert_eq!(block_event(&event), BlockEvent::Block { id: Some("cafe".into()), height: Some(9) });
+        assert_eq!(block_event(&event), BlockEvent::Block { slot: Some(9), parent: Some("cafe".into()) });
         assert_eq!(block_event("null"), BlockEvent::StreamEnded);
-        assert_eq!(block_event("{}"), BlockEvent::Block { id: None, height: None });
+        assert_eq!(block_event("{}"), BlockEvent::Block { slot: None, parent: None });
     }
 }

@@ -41,7 +41,10 @@ void FakeBlockchainImpl::onContextReady()
         while (!m_wake.wait_for(lock, std::chrono::seconds(1), [this] { return m_stopping; })) {
             const int64_t height = ++m_height;
             lock.unlock();
-            newBlock(LogosMap{{"block", LogosMap{{"header", {{"id", hexOf(height)}, {"height", height}}}}.dump()}}.dump());
+            // The real node's shape: a header with its slot and parent, no height.
+            const LogosMap header = {{"parent_block", hexOf(height - 1)},
+                                     {"slot", (nowMs() - kGenesisMs) / 1000}};
+            newBlock(LogosMap{{"block", LogosMap{{"header", header}}.dump()}}.dump());
             lock.lock();
         }
     });
