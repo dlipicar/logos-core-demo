@@ -52,13 +52,14 @@ step() { jq -c "select(.step == \"$2\") | .result" "$1"; }
 echo "== link, import, read, probe, caller gate, events"
 used=$(cat "$work/b-invite")
 out="$work/a1.jsonl"
-app a1 --hello --link-local "$work/b-invite" --caller-gate --probe --whoami --watch 15 --expect-blocks 3 | tee "$out"
+app a1 --hello --link-local "$work/b-invite" --caller-gate --narrow-live --probe --whoami --watch 15 --expect-blocks 3 | tee "$out"
 [ "$(step "$out" hello | jq -r .ping)" = pong ]
 [ "$(step "$out" whoami | jq -r .remote)" = true ]
 [ "$(step "$out" whoami | jq -r .name)" = core_demo ]
 [ "$(step "$out" node | jq -r .chain_id)" = fake-devnet ]
 [ "$(step "$out" probe | jq -r .ok)" = true ]
 [ "$(step "$out" callers | jq -r .shell_refused)" = true ]
+[ "$(step "$out" narrow_live | jq -r .after_refused)" = true ]
 [ "$(step "$out" blocks | jq -r .new_block_events)" -ge 3 ]
 
 echo "== the daemon restarts under a live import"

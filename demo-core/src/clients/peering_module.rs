@@ -85,6 +85,69 @@ impl PeeringModuleClient {
         });
     }
 
+    pub fn reevaluate_routes(&self) -> Result<std::collections::BTreeMap<String, serde_json::Value>, LogosError> {
+        let args = serde_json::Value::Array(vec![]);
+        let value = self.proxy.call_json("reevaluateRoutes", &args)?;
+        (|| Some((&value).as_object()?.iter().map(|(__k, __v)| Some((__k.clone(), __v.clone()))).collect::<Option<std::collections::BTreeMap<_, _>>>()?))().ok_or_else(|| logos_rust_sdk::LogosError::JsonError("result does not match the declared collection type".to_string()))
+    }
+
+    /// [`Self::reevaluate_routes`] with a per-call timeout: THIS call gives up after
+    /// `timeout` instead of waiting for the protocol default (20s).
+    /// The bound is threaded down to the call and stored nowhere, so
+    /// the next call through the same client — with a different
+    /// timeout, or with none — is unaffected.
+    ///
+    /// Fails with `LogosError::InvalidTimeout` if the duration cannot be
+    /// expressed on the protocol ABI (sub-millisecond, or longer than
+    /// ~24.8 days). It is refused, never clamped.
+    ///
+    /// A parallel entry point rather than a parameter on [`Self::reevaluate_routes`]:
+    /// Rust has neither overloading nor default arguments, so the
+    /// parameter would break every existing call site. STOPGAP — a later
+    /// breaking release folds this back into the single entry point.
+    pub fn reevaluate_routes_with_timeout(&self, timeout: std::time::Duration) -> Result<std::collections::BTreeMap<String, serde_json::Value>, LogosError> {
+        let args = serde_json::Value::Array(vec![]);
+        let value = self.proxy.call_json_with_timeout("reevaluateRoutes", &args, timeout)?;
+        (|| Some((&value).as_object()?.iter().map(|(__k, __v)| Some((__k.clone(), __v.clone()))).collect::<Option<std::collections::BTreeMap<_, _>>>()?))().ok_or_else(|| logos_rust_sdk::LogosError::JsonError("result does not match the declared collection type".to_string()))
+    }
+
+    /// Async twin of [`Self::reevaluate_routes`]: fire the call and receive the typed
+    /// result in `callback` once it lands — the Rust analog of the C++
+    /// client's `reevaluateRoutesAsync`. The callback runs from the protocol
+    /// completion path (the module's Qt event loop), so it fires after
+    /// the current method returns, never inline.
+    pub fn reevaluate_routes_async<F>(&self, callback: F)
+    where
+        F: FnOnce(Result<std::collections::BTreeMap<String, serde_json::Value>, LogosError>) + Send + 'static,
+    {
+        let args = serde_json::Value::Array(vec![]);
+        self.proxy.call_json_async("reevaluateRoutes", &args, move |result| {
+            callback(result.and_then(|value| (|| Some((&value).as_object()?.iter().map(|(__k, __v)| Some((__k.clone(), __v.clone()))).collect::<Option<std::collections::BTreeMap<_, _>>>()?))().ok_or_else(|| logos_rust_sdk::LogosError::JsonError("result does not match the declared collection type".to_string()))));
+        });
+    }
+
+    /// [`Self::reevaluate_routes_async`] with a per-call timeout — the async half of
+    /// [`Self::reevaluate_routes_with_timeout`]. The bound applies to THIS call only;
+    /// nothing is stored on the client.
+    ///
+    /// A duration the protocol ABI cannot express (sub-millisecond, or
+    /// longer than ~24.8 days) is delivered to `callback` as
+    /// `LogosError::InvalidTimeout`, synchronously and with nothing sent,
+    /// which is how every other undispatchable async call is reported.
+    ///
+    /// STOPGAP, like its sync twin: Rust cannot overload
+    /// [`Self::reevaluate_routes_async`], so the bounded form needs its own name until a
+    /// breaking release makes `timeout` a parameter of the one entry point.
+    pub fn reevaluate_routes_async_with_timeout<F>(&self, timeout: std::time::Duration, callback: F)
+    where
+        F: FnOnce(Result<std::collections::BTreeMap<String, serde_json::Value>, LogosError>) + Send + 'static,
+    {
+        let args = serde_json::Value::Array(vec![]);
+        self.proxy.call_json_async_with_timeout("reevaluateRoutes", &args, timeout, move |result| {
+            callback(result.and_then(|value| (|| Some((&value).as_object()?.iter().map(|(__k, __v)| Some((__k.clone(), __v.clone()))).collect::<Option<std::collections::BTreeMap<_, _>>>()?))().ok_or_else(|| logos_rust_sdk::LogosError::JsonError("result does not match the declared collection type".to_string()))));
+        });
+    }
+
     pub fn export_loaded(&self, module: &str, epoch: i64) -> Result<std::collections::BTreeMap<String, serde_json::Value>, LogosError> {
         let args = serde_json::Value::Array(vec![serde_json::Value::from(module), serde_json::Value::from(epoch)]);
         let value = self.proxy.call_json("exportLoaded", &args)?;

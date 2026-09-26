@@ -5,6 +5,7 @@ module peering_module {
   depends [peering_identity]
 
   method configure(config: {tstr: any}) -> {tstr: any}
+  method reevaluateRoutes() -> {tstr: any}
   method exportLoaded(module: tstr, epoch: int) -> {tstr: any}
   method exportExited(module: tstr, epoch: int) -> {tstr: any}
   method facadeLoaded(name: tstr, epoch: int) -> {tstr: any}

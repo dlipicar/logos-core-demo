@@ -4,7 +4,7 @@
 //!       [--name NAME] [--hello]
 //!       [--link-local FILE | --invite FILE | --pair HOST:PORT]
 //!       [--remote-module NAME] [--watch SECONDS] [--expect-blocks N] [--probe]
-//!       [--whoami] [--caller-gate] [--expect-denied] [--await-restart SECONDS]
+//!       [--whoami] [--caller-gate] [--narrow-live] [--expect-denied] [--await-restart SECONDS]
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -39,6 +39,7 @@ struct Args {
     probe: bool,
     whoami: bool,
     caller_gate: bool,
+    narrow_live: bool,
     expect_denied: bool,
     await_restart: u64,
 }
@@ -60,6 +61,7 @@ fn parse_args() -> Args {
         probe: false,
         whoami: false,
         caller_gate: false,
+        narrow_live: false,
         expect_denied: false,
         await_restart: 0,
     };
@@ -86,6 +88,7 @@ fn parse_args() -> Args {
             "--probe" => args.probe = true,
             "--whoami" => args.whoami = true,
             "--caller-gate" => args.caller_gate = true,
+            "--narrow-live" => args.narrow_live = true,
             "--expect-denied" => args.expect_denied = true,
             "--await-restart" => args.await_restart = value().parse().unwrap_or(0),
             other => fail("args", format!("unknown flag {other}")),
@@ -179,6 +182,22 @@ fn main() {
             fail("callers", format!("shell {shell:?}, probe {probe}"));
         }
         demo.import_node(&peer, &args.remote_module).unwrap_or_else(|e| fail("callers", e));
+    }
+
+    if args.narrow_live {
+        // Narrowing the callers of a live import ends the sessions it no longer
+        // admits: the app's next call is refused.
+        let before = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        demo.import_node_for(&peer, &args.remote_module, &["bc_probe"]).unwrap_or_else(|e| fail("narrow", e));
+        std::thread::sleep(Duration::from_secs(1));
+        demo.wait_import_ready(demo_core::NODE, Duration::from_secs(60)).unwrap_or_else(|e| fail("narrow", e));
+        let after = demo.core().call(demo_core::NODE, "get_chain_id", json!([]), Duration::from_secs(20));
+        emit("narrow_live", json!({ "before_ok": before.is_ok(), "after_refused": after.is_err() }));
+        if before.is_err() || after.is_ok() {
+            fail("narrow", format!("before {before:?}, after {after:?}"));
+        }
+        demo.import_node(&peer, &args.remote_module).unwrap_or_else(|e| fail("narrow", e));
+        demo.wait_import_ready(demo_core::NODE, Duration::from_secs(60)).unwrap_or_else(|e| fail("narrow", e));
     }
 
     if args.whoami {
