@@ -14,9 +14,11 @@
     logos-rust-sdk.inputs.logos-nix.follows = "logos-nix";
     # Slint needs a newer rustc than the nixpkgs pin ships.
     rust-overlay.follows = "logos-module-builder/rust-overlay";
+    # The C++ client generator and LogosCore, for bc-watch.
+    logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/standalone-apps";
   };
 
-  outputs = { self, nixpkgs, logos-nix, logos-module-builder, logos-logoscore-cli, logos-rust-sdk, rust-overlay }:
+  outputs = { self, nixpkgs, logos-nix, logos-module-builder, logos-logoscore-cli, logos-rust-sdk, rust-overlay, logos-cpp-sdk }:
     let
       lib = nixpkgs.lib;
       systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
@@ -29,14 +31,16 @@
       };
       modules = lib.genAttrs [ "hello_module" "bc_probe" "fake_blockchain" ] mkModule;
 
-      # The contracts the apps call, by module name.
+      # The contracts the apps call, by module name. The two from other repos
+      # are vendored (a C++ build outside nix needs them) and drift-checked.
       contracts = system: {
         blockchain_module = ./modules/bc_probe/contracts/blockchain_module.lidl;
         hello_module = "${modules.hello_module.packages.${system}.lidl}/hello_module.lidl";
         bc_probe = "${modules.bc_probe.packages.${system}.lidl}/bc_probe.lidl";
-        peering_module =
-          "${logos-logoscore-cli.inputs.logos-peering.packages.${system}.peering_module-lidl}/peering_module.lidl";
+        peering_module = ./contracts/peering_module.lidl;
       };
+      publishedPeeringLidl = system:
+        "${logos-logoscore-cli.inputs.logos-peering.packages.${system}.peering_module-lidl}/peering_module.lidl";
 
       # What an app ships to run its own runtime: no logosctl, no Qt host.
       runtimePayload = { pkgs, system }:
@@ -99,6 +103,23 @@
                                      bin = "logos-core-demo-headless";
                                      meta.mainProgram = "logos-core-demo-headless"; };
           default = self.packages.${system}.app;
+          # The C++ client: generated Qt-free clients over LogosCore.
+          bc-watch = pkgs.stdenv.mkDerivation {
+            pname = "bc-watch";
+            version = "0.1.0";
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [ ./cpp ./contracts ./modules/bc_probe/contracts ];
+            };
+            sourceRoot = "source/cpp/bc-watch";
+            nativeBuildInputs = [ pkgs.cmake pkgs.ninja ];
+            buildInputs = [ logos-cpp-sdk.packages.${system}.default pkgs.nlohmann_json ];
+            cmakeFlags = [
+              "-DLOGOS_RUNTIME_LIB_DIR=${self.packages.${system}.runtime}/lib"
+              "-DLOGOS_PROTOCOL_INCLUDE_DIR=${logos-cpp-sdk.inputs.logos-protocol.packages.${system}.logos-protocol-include}/include/cpp"
+            ];
+            meta.mainProgram = "bc-watch";
+          };
           # The generated clients, as committed under demo-core/src/clients.
           clients = logos-rust-sdk.lib.mkClients { inherit system; lidls = contracts system; };
           daemon = logos-logoscore-cli.packages.${system}.ctl;
@@ -124,6 +145,10 @@
           bash ${./tests/e2e.sh} > $TMPDIR/e2e.log 2>&1 || { tail -80 $TMPDIR/e2e.log; exit 1; }
           grep -v '^\[20' $TMPDIR/e2e.log
           cp $TMPDIR/e2e.log $out
+        '';
+        contracts-up-to-date = pkgs.runCommand "logos-core-demo-contracts" { } ''
+          diff -u ${publishedPeeringLidl system} ${./contracts/peering_module.lidl}
+          touch $out
         '';
         clients-up-to-date = logos-rust-sdk.lib.clientsUpToDate {
           inherit system;

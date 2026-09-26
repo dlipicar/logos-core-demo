@@ -1,0 +1,55 @@
+module peering_module {
+  version "0.1.0"
+  description "Links this runtime with others: pairing, exports and imports, and route tickets for module calls between runtimes."
+  category "system"
+  depends [peering_identity]
+
+  method configure(config: {tstr: any}) -> {tstr: any}
+  method exportLoaded(module: tstr, epoch: int) -> {tstr: any}
+  method exportExited(module: tstr, epoch: int) -> {tstr: any}
+  method facadeLoaded(name: tstr, epoch: int) -> {tstr: any}
+  method facadeExited(name: tstr, epoch: int) -> {tstr: any}
+  method imports() -> {tstr: any}
+  method importStates() -> {tstr: any}
+  method remotePolicy() -> {tstr: any}
+  method issueCertificate(role: tstr, csrPem: tstr) -> {tstr: any}
+  method sessionAnchors() -> {tstr: any}
+  method redeemTicket(request: {tstr: any}) -> {tstr: any}
+  method noteEndpoints(endpoints: [any]) -> {tstr: any}
+  method sessionState() -> {tstr: any}
+  method requestRoute(consumer: tstr, timeoutMs: int) -> {tstr: any}
+  method renewRoute(route: tstr) -> {tstr: any}
+  method importDescriptor() -> {tstr: any}
+  method reportImportState(state: tstr, reason: tstr) -> {tstr: any}
+  method status() -> {tstr: any}
+  method peers() -> {tstr: any}
+  method nearby() -> {tstr: any}
+  method pending() -> {tstr: any}
+  method routes() -> {tstr: any}
+  method exports() -> {tstr: any}
+  method peerExports(peer: tstr) -> {tstr: any}
+  method openPairingWindow(seconds: int) -> {tstr: any}
+  method pairWith(host: tstr, port: int) -> {tstr: any}
+  method confirmPairing(id: tstr, allow: ? [tstr]) -> {tstr: any}
+  method rejectPairing(id: tstr) -> {tstr: any}
+  method createInvite(role: tstr, ttlSeconds: int, allow: ? [tstr]) -> {tstr: any}
+  method redeemInvite(invite: tstr, allow: ? [tstr]) -> {tstr: any}
+  method removePeer(peer: tstr) -> {tstr: any}
+  method renamePeer(peer: tstr, alias: tstr) -> {tstr: any}
+  method setExport(module: tstr, config: {tstr: any}) -> {tstr: any}
+  method removeExport(module: tstr) -> {tstr: any}
+  method setImport(name: tstr, config: {tstr: any}) -> {tstr: any}
+  method removeImport(name: tstr) -> {tstr: any}
+  method setPolicy(policy: {tstr: any}) -> {tstr: any}
+
+  event importsChanged()
+  event exportsChanged()
+  event importStateChanged(name: tstr, state: tstr, reason: tstr)
+  event remotePolicyChanged()
+  event anchorsChanged()
+  event routesRevoked(peer: tstr, generation: int)
+  event routeRenewed(route: tstr, lifetimeMs: int)
+  event peersChanged()
+  event pairingRequested(pending: {tstr: any})
+  event nearbyChanged()
+}
