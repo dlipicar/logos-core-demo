@@ -1,0 +1,4 @@
+cryptarchia:
+  service:
+    bootstrap:
+      prolonged_bootstrap_period: '31536000.000000000'
