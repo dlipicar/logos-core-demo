@@ -80,7 +80,8 @@ the module directories as assets. The app lays those out in its storage when it
 starts.
 
 Link a daemon by pairing code, or with an invite. An invite opens the app as a
-`logos-pair:` link, so scanning a QR code of it with the camera fills it in
+`logos-pair:` link, running or not, so scanning a QR code of it with the camera
+fills it in
 (`scripts/node-daemon.sh invite | jq -r .invite | qrencode -t ansiutf8`). From the
 emulator the host computer is `10.0.2.2`:
 
