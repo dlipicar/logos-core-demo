@@ -101,6 +101,19 @@
           '';
           inherit meta;
         };
+      e2eCheck = { pkgs, system, name, singleProcess ? false }: pkgs.runCommand name ({
+        nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.python3 pkgs.coreutils ];
+        CTL = "${self.packages.${system}.daemon}/bin/logosctl";
+        HEADLESS = "${self.packages.${system}.headless}/bin/logos-core-demo-headless";
+        FAKE = "${self.packages.${system}.fake_blockchain}";
+        APP_HOME = "${self.packages.${system}.headless}/share/logos-core-demo";
+      } // lib.optionalAttrs singleProcess { SINGLE_PROCESS = "1"; }) ''
+        export HOME=$TMPDIR/home
+        mkdir -p $HOME
+        bash ${./tests/e2e.sh} > $TMPDIR/e2e.log 2>&1 || { tail -80 $TMPDIR/e2e.log; exit 1; }
+        grep -v '^\[20' $TMPDIR/e2e.log
+        cp $TMPDIR/e2e.log $out
+      '';
     in
     {
       packages = forAllSystems ({ pkgs, system }:
@@ -223,19 +236,12 @@
         # Two runtimes on one machine: a daemon exports fake_blockchain and the
         # headless app links, imports, reads, probes, survives a restart, and is
         # refused where the peer grants nothing.
-        e2e = pkgs.runCommand "logos-core-demo-e2e" {
-          nativeBuildInputs = [ pkgs.bash pkgs.jq pkgs.python3 pkgs.coreutils ];
-          CTL = "${self.packages.${system}.daemon}/bin/logosctl";
-          HEADLESS = "${self.packages.${system}.headless}/bin/logos-core-demo-headless";
-          FAKE = "${self.packages.${system}.fake_blockchain}";
-          APP_HOME = "${self.packages.${system}.headless}/share/logos-core-demo";
-        } ''
-          export HOME=$TMPDIR/home
-          mkdir -p $HOME
-          bash ${./tests/e2e.sh} > $TMPDIR/e2e.log 2>&1 || { tail -80 $TMPDIR/e2e.log; exit 1; }
-          grep -v '^\[20' $TMPDIR/e2e.log
-          cp $TMPDIR/e2e.log $out
-        '';
+        e2e = e2eCheck { inherit pkgs system; name = "logos-core-demo-e2e"; };
+        # The same with every module of the app's runtime in its own process:
+        # peering's, the import's facade, hello_module and bc_probe.
+        e2e-single-process = e2eCheck {
+          inherit pkgs system; name = "logos-core-demo-e2e-single-process"; singleProcess = true;
+        };
         contracts-up-to-date = pkgs.runCommand "logos-core-demo-contracts" { } ''
           diff -u ${publishedPeeringLidl system} ${./contracts/peering_module.lidl}
           touch $out

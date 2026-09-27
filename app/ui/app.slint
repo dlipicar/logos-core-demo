@@ -1,4 +1,4 @@
-import { Button, LineEdit, TabWidget, GroupBox, ScrollView, VerticalBox, HorizontalBox, TextEdit, StandardListView } from "std-widgets.slint";
+import { Button, CheckBox, LineEdit, TabWidget, GroupBox, ScrollView, VerticalBox, HorizontalBox, TextEdit, StandardListView } from "std-widgets.slint";
 
 export struct PeerRow {
     runtime_id: string,
@@ -23,6 +23,7 @@ export component AppWindow inherits Window {
     // Runtime
     in property <string> runtime-state: "STOPPED";
     in property <bool> busy: false;
+    in-out property <bool> single-process: false;
     in property <string> modules-text;
     in property <string> processes-text;
     in property <string> log-text;
@@ -90,6 +91,11 @@ export component AppWindow inherits Window {
                     HorizontalBox {
                         Button { text: "Start"; enabled: !root.busy && root.runtime-state != "RUNNING"; clicked => { root.start-runtime(); } }
                         Button { text: "Stop"; enabled: !root.busy && root.runtime-state == "RUNNING"; clicked => { root.stop-runtime(); } }
+                    }
+                    CheckBox {
+                        text: "Every module in the runtime's process";
+                        checked <=> root.single-process;
+                        enabled: !root.busy && root.runtime-state == "STOPPED";
                     }
                     GroupBox {
                         title: "Modules";

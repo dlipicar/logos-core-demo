@@ -1,7 +1,7 @@
 //! Runs the demo's steps without a UI and prints one JSON object per line.
 //!
 //!   logos-core-demo-headless --runtime DIR --modules DIR --data DIR --tmp DIR
-//!       [--name NAME] [--hello]
+//!       [--name NAME] [--single-process] [--hello]
 //!       [--link-local FILE | --invite FILE | --pair HOST:PORT]
 //!       [--remote-module NAME] [--watch SECONDS] [--expect-blocks N] [--probe]
 //!       [--whoami] [--caller-gate] [--narrow-live] [--expect-denied] [--await-restart SECONDS]
@@ -30,6 +30,7 @@ struct Args {
     tmp: PathBuf,
     name: String,
     hello: bool,
+    single_process: bool,
     link_local: Option<PathBuf>,
     invite: Option<PathBuf>,
     pair: Option<(String, i64)>,
@@ -52,6 +53,7 @@ fn parse_args() -> Args {
         tmp: PathBuf::new(),
         name: "logos-core-demo".into(),
         hello: false,
+        single_process: false,
         link_local: None,
         invite: None,
         pair: None,
@@ -75,6 +77,7 @@ fn parse_args() -> Args {
             "--tmp" => args.tmp = value().into(),
             "--name" => args.name = value(),
             "--hello" => args.hello = true,
+            "--single-process" => args.single_process = true,
             "--link-local" => args.link_local = Some(value().into()),
             "--invite" => args.invite = Some(value().into()),
             "--pair" => {
@@ -149,7 +152,8 @@ fn main() {
     });
     let paths = Paths::desktop(&args.runtime, &args.modules, &args.data, &args.tmp);
     let started = Instant::now();
-    let demo = Demo::start("core_demo", &args.name, &paths, sink).unwrap_or_else(|e| fail("start", e));
+    let demo = Demo::start("core_demo", &args.name, &paths, args.single_process, sink)
+        .unwrap_or_else(|e| fail("start", e));
     emit("start", json!({ "ms": started.elapsed().as_millis() as u64 }));
 
     if args.hello {
@@ -256,6 +260,11 @@ fn main() {
         if probe.get("ok").and_then(Value::as_bool) != Some(true) {
             fail("probe", probe.to_string());
         }
+        // The runtime's child processes, by module: none under single_process.
+        let stats = demo.module_stats().unwrap_or_else(|e| fail("processes", e));
+        let names: Vec<Value> = stats.as_array().into_iter().flatten()
+            .filter_map(|row| row.get("name").cloned()).collect();
+        emit("processes", Value::Array(names));
     }
 
     if args.watch > 0 {

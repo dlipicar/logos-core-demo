@@ -106,18 +106,27 @@ fn peering(reply: Result<BTreeMap<String, Value>, logos_rust_sdk::LogosError>) -
 
 impl Demo {
     /// Spawns this app's runtime; up to two minutes while it loads its modules.
-    pub fn start(shell: &str, name: &str, paths: &Paths, sink: EventSink) -> Result<Demo, String> {
+    /// `single_process` keeps every module in the runtime's process, the import too.
+    pub fn start(shell: &str, name: &str, paths: &Paths, single_process: bool, sink: EventSink)
+        -> Result<Demo, String> {
         std::fs::create_dir_all(&paths.data).map_err(fail)?;
         std::fs::create_dir_all(&paths.tmp).map_err(fail)?;
+        // The app's own modules ship with it, so they are bundled too: only a
+        // bundled module may run in the runtime's process.
         let config = Config::new(shell)
             .bundled_modules_dir(&paths.bundled_modules)
-            .modules_dir(&paths.app_modules)
+            .bundled_modules_dir(&paths.app_modules)
             .persistence(paths.data.join("runtime"))
             .peering(json!({ "name": name }))
             .runtime_path(&paths.runtime_bin)
             .host_plain_path(&paths.host_plain_bin)
             .host_remote_path(&paths.host_remote_bin)
             .tmp_dir(&paths.tmp);
+        let config = if single_process {
+            config.placement_policy(json!({ "single_process": true }))
+        } else {
+            config
+        };
         let core = LogosCore::start(config).map_err(fail)?;
         let exit_sink = sink.clone();
         core.on_exit(move |reason| exit_sink(DemoEvent::RuntimeExited(reason)));

@@ -18,7 +18,8 @@ mod android;
 const SHELL: &str = "core_demo";
 
 enum Cmd {
-    Start,
+    /// Whether every module runs in the runtime's process.
+    Start(bool),
     Stop,
     LoadHello,
     Ping,
@@ -141,7 +142,10 @@ pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>, links: Opti
     let send = |tx: &Sender<Cmd>, cmd: Cmd| {
         let _ = tx.send(cmd);
     };
-    ui.on_start_runtime({ let tx = tx.clone(); move || send(&tx, Cmd::Start) });
+    ui.on_start_runtime({
+        let (tx, weak) = (tx.clone(), ui.as_weak());
+        move || send(&tx, Cmd::Start(weak.upgrade().is_some_and(|ui| ui.get_single_process())))
+    });
     ui.on_stop_runtime({ let tx = tx.clone(); move || send(&tx, Cmd::Stop) });
     ui.on_load_hello({ let tx = tx.clone(); move || send(&tx, Cmd::LoadHello) });
     ui.on_ping({ let tx = tx.clone(); move || send(&tx, Cmd::Ping) });
@@ -241,7 +245,7 @@ impl Worker {
 
     fn execute(&mut self, cmd: Cmd) -> Result<(), String> {
         match cmd {
-            Cmd::Start => self.start()?,
+            Cmd::Start(single_process) => self.start(single_process)?,
             Cmd::Stop => {
                 if let Some(demo) = self.demo.take() {
                     demo.stop();
@@ -318,7 +322,7 @@ impl Worker {
         Ok(())
     }
 
-    fn start(&mut self) -> Result<(), String> {
+    fn start(&mut self, single_process: bool) -> Result<(), String> {
         if self.demo.is_some() {
             return Ok(());
         }
@@ -327,7 +331,7 @@ impl Worker {
         let sink: EventSink = std::sync::Arc::new(move |event| {
             let _ = tx.send(Cmd::Event(event));
         });
-        let demo = match Demo::start(SHELL, &peer_name(), &self.paths, sink) {
+        let demo = match Demo::start(SHELL, &peer_name(), &self.paths, single_process, sink) {
             Ok(demo) => demo,
             Err(e) => {
                 self.ui(|ui| ui.set_runtime_state("STOPPED".into()));
