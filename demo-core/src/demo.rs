@@ -136,13 +136,17 @@ impl Demo {
             .bundled_modules_dir(&paths.app_modules)
             .persistence(paths.data.join("runtime"))
             .peering(json!({ "name": name }))
-            .runtime_path(&paths.runtime_bin)
-            .host_plain_path(&paths.host_plain_bin)
-            .host_remote_path(&paths.host_remote_bin)
             .tmp_dir(&paths.tmp);
+        // Only a spawned runtime has a program, and hosts to start modules in.
+        let spawned = |config: Config| {
+            config
+                .runtime_path(&paths.runtime_bin)
+                .host_plain_path(&paths.host_plain_bin)
+                .host_remote_path(&paths.host_remote_bin)
+        };
         let config = match placement {
-            Placement::Subprocess => config,
-            Placement::SingleProcess => config.placement_policy(json!({ "single_process": true })),
+            Placement::Subprocess => spawned(config),
+            Placement::SingleProcess => spawned(config).placement_policy(json!({ "single_process": true })),
             Placement::Embedded => config
                 .embedded(true)
                 .placement_policy(json!({ "single_process": true, "local_endpoints": false })),

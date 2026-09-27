@@ -1743,6 +1743,7 @@ dependencies = [
  "i-slint-common",
  "i-slint-core",
  "i-slint-renderer-femtovg",
+ "i-slint-renderer-skia",
  "i-slint-renderer-software",
  "input",
  "libseat",
@@ -1768,6 +1769,7 @@ dependencies = [
  "i-slint-core",
  "i-slint-core-macros",
  "i-slint-renderer-femtovg",
+ "i-slint-renderer-skia",
 ]
 
 [[package]]
@@ -1779,6 +1781,7 @@ dependencies = [
  "cfg_aliases",
  "i-slint-common",
  "i-slint-core",
+ "i-slint-renderer-skia",
  "i-slint-renderer-software",
  "vtable",
 ]
@@ -2591,6 +2594,7 @@ dependencies = [
  "demo-core",
  "jni 0.21.1",
  "libc",
+ "objc2 0.6.4",
  "serde_json",
  "slint",
  "slint-build",
@@ -2607,7 +2611,7 @@ dependencies = [
 [[package]]
 name = "logos-rust-sdk"
 version = "0.3.0"
-source = "git+https://github.com/logos-co/logos-rust-sdk?rev=43d619cfea63b7ca958a587d935e1ab97cdc1823#43d619cfea63b7ca958a587d935e1ab97cdc1823"
+source = "git+https://github.com/logos-co/logos-rust-sdk?rev=54c6846e328161e40ebd4ca27af50f770f9b3f3a#54c6846e328161e40ebd4ca27af50f770f9b3f3a"
 dependencies = [
  "serde",
  "serde_json",
@@ -4080,6 +4084,7 @@ dependencies = [
  "i-slint-core",
  "i-slint-core-macros",
  "i-slint-renderer-femtovg",
+ "i-slint-renderer-skia",
  "i-slint-renderer-software",
  "num-traits",
  "once_cell",
@@ -4202,6 +4207,7 @@ checksum = "aac18da81ebbf05109ab275b157c22a653bb3c12cf884450179942f81bcbf6c3"
 dependencies = [
  "as-raw-xcb-connection",
  "bytemuck",
+ "drm",
  "fastrand",
  "js-sys",
  "memmap2",

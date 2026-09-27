@@ -17,10 +17,18 @@ path = "src/main.rs"
 demo-core.workspace = true
 serde_json.workspace = true
 # No default features: they include Slint's Qt backend, and this app is Qt-free.
-slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "accessibility", "renderer-femtovg", "renderer-software"] }
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "renderer-software"] }
+
+# femtovg draws with OpenGL, which iOS does not have: Skia draws with Metal there.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+slint = { version = "1.18", default-features = false, features = ["accessibility", "renderer-femtovg"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 slint = { version = "1.18", default-features = false, features = ["backend-winit"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+slint = { version = "1.18", default-features = false, features = ["renderer-skia"] }
+objc2 = "0.6"
 
 [target.'cfg(target_os = "android")'.dependencies]
 slint = { version = "1.18", default-features = false, features = ["backend-android-activity-06"] }

@@ -75,6 +75,35 @@
       };
       windowsLiblogos = cli.logos-liblogos.packages.x86_64-windows;
       windowsPeering = cli.logos-peering.packages.x86_64-windows;
+      # The runtime inside the app, as iOS requires; each module from its
+      # generated sources, compiled for the simulator.
+      ios = import ./nix/ios.nix {
+        inherit lib logos-nix nixpkgs rust-overlay;
+        src = rustSrc;
+        liblogosFlake = cli.logos-liblogos;
+        moduleTrees =
+          let
+            # A module flake's own outputs, or ones re-exported as <name>-<output>.
+            entry = group: name: builder: packages: prefix: {
+              inherit group name builder;
+              tree = packages."${prefix}generate";
+              native = packages."${prefix}lib";
+            };
+            module = group: name: flake:
+              entry group name flake.inputs.logos-module-builder flake.packages.aarch64-darwin "";
+            runtime = cli.logos-liblogos.inputs;
+            peering = cli.logos-peering;
+            peeringModule = name:
+              entry "bundled" name peering.inputs.logos-module-builder peering.packages.aarch64-darwin "${name}-";
+          in [
+            (module "bundled" "capability_module" runtime.logos-capability-module)
+            (module "bundled" "modules_state" runtime.logos-modules-state-module)
+            (peeringModule "peering_identity")
+            (peeringModule "peering_module")
+            (entry "app" "hello_module" logos-module-builder modules.hello_module.packages.aarch64-darwin "")
+            (entry "app" "bc_probe" logos-module-builder modules.bc_probe.packages.aarch64-darwin "")
+          ];
+      };
 
       # What winit and femtovg open at run time on Linux.
       linuxGuiLibs = pkgs: with pkgs; [
@@ -256,7 +285,29 @@
             };
             zip = windows.zip portable;
           };
+          # Cross-built with Xcode's clang on aarch64-darwin: the simulator's .app.
+          aarch64-ios-simulator = { inherit (ios) app program liblogos; };
         };
+
+      # Every stage of the iOS build, for building one on its own.
+      legacyPackages.aarch64-darwin.ios = ios;
+
+      # Installs the .app in the booted simulator and runs it, its output here.
+      apps.aarch64-darwin.ios-sim = {
+        type = "app";
+        program = toString ((mkPkgs "aarch64-darwin").writeShellScript "logos-core-demo-ios-sim" ''
+          set -eu
+          xcrun simctl list devices booted | grep -q Booted \
+            || { echo "boot a simulator first (open -a Simulator)" >&2; exit 1; }
+          # simctl copies modes too, and cannot fill a read-only directory it made.
+          copy=$(mktemp -d)
+          cp -R ${ios.app}/LogosCoreDemo.app "$copy/"
+          chmod -R u+w "$copy"
+          xcrun simctl install booted "$copy/LogosCoreDemo.app"
+          rm -rf "$copy"
+          exec xcrun simctl launch --console-pty --terminate-running-process booted co.logos.coredemo "$@"
+        '');
+      };
 
       checks = forAllSystems ({ pkgs, system }: {
         # Two runtimes on one machine: a daemon exports fake_blockchain and the

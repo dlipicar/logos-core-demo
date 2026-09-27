@@ -1,6 +1,6 @@
 # Logos Core Demo
 
-Qt-free apps for macOS, Linux, Windows and Android that run a Logos runtime of their own
+Qt-free apps for macOS, Linux, Windows, Android and iOS that run a Logos runtime of their own
 and use a Logos blockchain node that runs somewhere else: in a `logosctl` daemon
 on the same computer, or on another one on the network.
 
@@ -9,8 +9,8 @@ It is [logoslib-android-poc](https://github.com/fryorcraken/logoslib-android-poc
 
 | | the POC | this demo |
 |---|---|---|
-| Platforms | Android | macOS, Linux, Windows, Android |
-| UI and runtime | Kotlin, JNI, Qt | Rust and Slint; the runtime is spawned, no Qt anywhere |
+| Platforms | Android | macOS, Linux, Windows, Android, iOS (simulator) |
+| UI and runtime | Kotlin, JNI, Qt | Rust and Slint; the runtime is spawned (inside the app on iOS), no Qt anywhere |
 | The node | runs on the phone | runs in a daemon; the app imports it through peering |
 | Calling modules | `LogosAPI` by name | clients generated from each module's contract |
 
@@ -18,13 +18,15 @@ It is [logoslib-android-poc](https://github.com/fryorcraken/logoslib-android-poc
 
 | Path | What |
 |---|---|
-| `app/` | The Slint app. The same crate is the desktop binary and, on Android, the NativeActivity library (`app/src/android.rs`). |
+| `app/` | The Slint app. The same crate is the desktop binary, the NativeActivity library on Android (`app/src/android.rs`), and the iOS app (`app/src/ios.rs`). |
 | `demo-core/` | What the screens do: start the runtime, link a daemon, import the node, read it, watch blocks. Generated clients are in `src/clients/`. |
 | `headless/` | A CLI over `demo-core`, for tests and scripts (JSON lines). |
 | `cpp/bc-watch/` | The node, read from C++ through clients from `logos_generate_clients`. |
 | `modules/` | `hello_module` (ping and an event), `bc_probe` (reads the node from a local module) and `fake_blockchain` (the node's shape, for tests). |
 | `scripts/node-daemon.sh` | Runs a devnet follower in a `logosctl` daemon and exports it. |
 | `nix/android.nix` | The Android library, the APK and an emulator SDK. |
+| `nix/windows.nix` | The Windows programs and a portable zip, cross-built with MinGW. |
+| `nix/ios.nix` | The runtime's C++ stack for the iOS simulator, the app and `LogosCoreDemo.app`. |
 
 ## The node
 
@@ -108,6 +110,39 @@ daemon's invite in `%LOCALAPPDATA%\.logosctl`, where `logosctl` keeps it.
 Modules run in their own processes there: the in-process checkbox is hidden,
 since the Windows runtime has no in-process facades yet.
 
+### iOS
+
+```bash
+nix run .#ios-sim                     # on aarch64-darwin: install and run it in the booted simulator
+nix build .#packages.aarch64-ios-simulator.app
+```
+
+iOS lets an app start no process, so the runtime runs inside the app. Every
+module, the import's facade too, runs in the app's process, and the app binds no
+local socket. `nix/ios.nix` builds the runtime's C++ stack with Xcode's clang
+(Xcode 26.5, which the build checks), the app for `aarch64-apple-ios-sim`, and
+`LogosCoreDemo.app`: the libraries in `Frameworks/`, the modules in `modules/`
+and `app-modules/`, and the headless client beside the app. The simulator only,
+for now.
+
+The runtime starts with the app, so there is no Start or Stop. The simulator
+shares the Mac's network: pair with a daemon on the Mac by code at `127.0.0.1`,
+or paste an invite whose host is `127.0.0.1`. Launched with one, the app redeems
+it at once:
+
+```bash
+SIMCTL_CHILD_LOGOS_CORE_DEMO_INVITE="$(cat invite.txt)" nix run .#ios-sim
+```
+
+The headless client runs in the simulator too:
+
+```bash
+app=$(nix build --print-out-paths .#packages.aarch64-ios-simulator.app)/LogosCoreDemo.app
+xcrun simctl spawn booted $app/logos-core-demo-headless --embedded --runtime $app \
+  --modules $app/app-modules --data /tmp/lcd-ios/data --tmp /tmp/lcd-ios/tmp \
+  --invite invite.txt --hello --probe --watch 60
+```
+
 ## Tests
 
 ```bash
@@ -119,6 +154,10 @@ nix flake check
   gets `newBlock` events. It survives the daemon's restart. It is refused when
   its consumer is not an allowed caller and when the peer grants nothing, and
   its live session ends when the rule narrows.
+- `e2e-single-process`: the same, with every module (the import too) in the
+  runtime's process.
+- `e2e-embedded`: the same, with the runtime inside the app as on iOS. The app
+  has no child process and binds no local socket.
 - `clients-up-to-date`, `contracts-up-to-date`: the committed clients match the
   contracts, and the vendored `peering_module` contract matches the published one.
 

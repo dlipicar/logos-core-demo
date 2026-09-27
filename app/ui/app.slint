@@ -26,6 +26,10 @@ export component AppWindow inherits Window {
     in-out property <bool> single-process: false;
     // Windows' runtime has no in-process facades yet.
     in property <bool> single-process-available: true;
+    // False where the runtime runs in the app for its whole life (iOS).
+    in property <bool> runtime-controls: true;
+    // A Paste button for the invite, where text fields cannot paste (iOS).
+    in property <bool> paste-available: false;
     in property <string> modules-text;
     in property <string> processes-text;
     in property <string> log-text;
@@ -70,6 +74,7 @@ export component AppWindow inherits Window {
     callback methods();
     callback link-local();
     callback redeem-invite();
+    callback paste-invite();
     callback pair();
     callback confirm-pair();
     callback refresh-peers();
@@ -90,7 +95,7 @@ export component AppWindow inherits Window {
                 VerticalBox {
                     alignment: start;
                     Row { label: "Runtime"; value: root.runtime-state; }
-                    HorizontalBox {
+                    if root.runtime-controls: HorizontalBox {
                         Button { text: "Start"; enabled: !root.busy && root.runtime-state != "RUNNING"; clicked => { root.start-runtime(); } }
                         Button { text: "Stop"; enabled: !root.busy && root.runtime-state == "RUNNING"; clicked => { root.stop-runtime(); } }
                     }
@@ -151,7 +156,10 @@ export component AppWindow inherits Window {
                         title: "Another computer: invite";
                         VerticalBox {
                             TextEdit { text <=> root.invite-text; min-height: 70px; wrap: char-wrap; }
-                            Button { text: "Redeem invite"; enabled: root.runtime-state == "RUNNING" && !root.busy; clicked => { root.redeem-invite(); } }
+                            HorizontalBox {
+                                if root.paste-available: Button { text: "Paste"; clicked => { root.paste-invite(); } }
+                                Button { text: "Redeem invite"; enabled: root.runtime-state == "RUNNING" && !root.busy; clicked => { root.redeem-invite(); } }
+                            }
                         }
                     }
                     GroupBox {

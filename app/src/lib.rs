@@ -14,12 +14,15 @@ slint::include_modules!();
 
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(target_os = "ios")]
+pub mod ios;
 
 const SHELL: &str = "core_demo";
+// The Node tab's index in app.slint.
+const NODE_TAB: i32 = 4;
 
 enum Cmd {
-    /// Whether every module runs in the runtime's process.
-    Start(bool),
+    Start(Placement),
     Stop,
     LoadHello,
     Ping,
@@ -116,6 +119,11 @@ fn peer_name() -> String {
     if let Some(model) = android::device_model() {
         return format!("Logos Core Demo on {model}");
     }
+    // iOS gives an app no host name; the simulator names its device.
+    if cfg!(target_os = "ios") {
+        let device = std::env::var("SIMULATOR_DEVICE_NAME").unwrap_or_else(|_| "iOS".into());
+        return format!("Logos Core Demo on {device}");
+    }
     let host = std::env::var(if cfg!(windows) { "COMPUTERNAME" } else { "HOSTNAME" })
         .ok()
         .or_else(|| std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_string()))
@@ -135,12 +143,21 @@ pub type LinkSource = Box<dyn Fn() -> Option<String>>;
 /// `links`: invites opened later (Android: a logos-pair: link or QR code).
 pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>, links: Option<LinkSource>)
     -> Result<(), slint::PlatformError> {
+    run_app(paths, desktop, invite, links, false)
+}
+
+/// `redeem`: redeem `invite` once the runtime runs, rather than wait for the button.
+fn run_app(paths: Paths, desktop: bool, invite: Option<String>, links: Option<LinkSource>, redeem: bool)
+    -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     ui.set_desktop(desktop);
-    ui.set_single_process_available(!cfg!(windows));
+    ui.set_single_process_available(!cfg!(any(windows, target_os = "ios")));
+    // iOS starts no process: the runtime runs in the app from launch to exit.
+    ui.set_runtime_controls(!cfg!(target_os = "ios"));
+    ui.set_paste_available(cfg!(target_os = "ios"));
     ui.set_local_invite_path(default_local_invite().into());
-    if let Some(invite) = invite {
-        ui.set_invite_text(invite.into());
+    if let Some(invite) = &invite {
+        ui.set_invite_text(invite.as_str().into());
         ui.set_current_tab(2);
     }
     let link_timer = slint::Timer::default();
@@ -160,13 +177,22 @@ pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>, links: Opti
         let tx = tx.clone();
         move || Worker::new(paths, weak, tx).run(rx)
     });
+    if cfg!(target_os = "ios") {
+        let _ = tx.send(Cmd::Start(Placement::Embedded));
+    }
+    if let (true, Some(invite)) = (redeem, invite) {
+        let _ = tx.send(Cmd::Redeem(invite));
+    }
 
     let send = |tx: &Sender<Cmd>, cmd: Cmd| {
         let _ = tx.send(cmd);
     };
     ui.on_start_runtime({
         let (tx, weak) = (tx.clone(), ui.as_weak());
-        move || send(&tx, Cmd::Start(weak.upgrade().is_some_and(|ui| ui.get_single_process())))
+        move || {
+            let single = weak.upgrade().is_some_and(|ui| ui.get_single_process());
+            send(&tx, Cmd::Start(if single { Placement::SingleProcess } else { Placement::Subprocess }))
+        }
     });
     ui.on_stop_runtime({ let tx = tx.clone(); move || send(&tx, Cmd::Stop) });
     ui.on_load_hello({ let tx = tx.clone(); move || send(&tx, Cmd::LoadHello) });
@@ -197,6 +223,15 @@ pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>, links: Opti
             if let Some(ui) = weak.upgrade() {
                 let port = ui.get_pair_port().parse().unwrap_or(7443);
                 send(&tx, Cmd::Pair(ui.get_pair_host().to_string(), port))
+            }
+        }
+    });
+    #[cfg(target_os = "ios")]
+    ui.on_paste_invite({
+        let weak = ui.as_weak();
+        move || {
+            if let (Some(text), Some(ui)) = (ios::pasteboard_text(), weak.upgrade()) {
+                ui.set_invite_text(text.into());
             }
         }
     });
@@ -267,7 +302,7 @@ impl Worker {
 
     fn execute(&mut self, cmd: Cmd) -> Result<(), String> {
         match cmd {
-            Cmd::Start(single_process) => self.start(single_process)?,
+            Cmd::Start(placement) => self.start(placement)?,
             Cmd::Stop => {
                 if let Some(demo) = self.demo.take() {
                     demo.stop();
@@ -344,7 +379,7 @@ impl Worker {
         Ok(())
     }
 
-    fn start(&mut self, single_process: bool) -> Result<(), String> {
+    fn start(&mut self, placement: Placement) -> Result<(), String> {
         if self.demo.is_some() {
             return Ok(());
         }
@@ -353,7 +388,6 @@ impl Worker {
         let sink: EventSink = std::sync::Arc::new(move |event| {
             let _ = tx.send(Cmd::Event(event));
         });
-        let placement = if single_process { Placement::SingleProcess } else { Placement::Subprocess };
         let demo = match Demo::start(SHELL, &peer_name(), &self.paths, placement, sink) {
             Ok(demo) => demo,
             Err(e) => {
@@ -390,6 +424,7 @@ impl Worker {
         self.ui(|ui| {
             ui.set_import_state("ready".into());
             ui.set_connect_status("Linked; the node is on the Node tab".into());
+            ui.set_current_tab(NODE_TAB);
         });
         self.log(format!("imported {module} as {}", demo_core::NODE));
         Ok(())
