@@ -24,6 +24,8 @@ export component AppWindow inherits Window {
     in property <string> runtime-state: "STOPPED";
     in property <bool> busy: false;
     in-out property <bool> single-process: false;
+    // Windows' runtime has no in-process facades yet.
+    in property <bool> single-process-available: true;
     in property <string> modules-text;
     in property <string> processes-text;
     in property <string> log-text;
@@ -93,6 +95,7 @@ export component AppWindow inherits Window {
                         Button { text: "Stop"; enabled: !root.busy && root.runtime-state == "RUNNING"; clicked => { root.stop-runtime(); } }
                     }
                     CheckBox {
+                        visible: root.single-process-available;
                         text: "Every module in the runtime's process";
                         checked <=> root.single-process;
                         enabled: !root.busy && root.runtime-state == "STOPPED";

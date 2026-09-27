@@ -23,6 +23,11 @@ pub const NODE: &str = "blockchain_module";
 const PROBE: &str = "bc_probe";
 const HELLO: &str = "hello_module";
 
+/// `name` as this platform names a program: `name.exe` on Windows.
+pub fn exe(name: &str) -> String {
+    format!("{name}{}", std::env::consts::EXE_SUFFIX)
+}
+
 /// Where the runtime and the demo's modules live.
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -38,10 +43,11 @@ pub struct Paths {
 impl Paths {
     /// The desktop layout: `<runtime>/bin`, `<runtime>/modules` (bundled).
     pub fn desktop(runtime: &Path, app_modules: &Path, data: &Path, tmp: &Path) -> Paths {
+        let bin = |name: &str| runtime.join("bin").join(exe(name));
         Paths {
-            runtime_bin: runtime.join("bin/logos_runtime"),
-            host_plain_bin: runtime.join("bin/logos_host_plain"),
-            host_remote_bin: runtime.join("bin/logos_host_remote"),
+            runtime_bin: bin("logos_runtime"),
+            host_plain_bin: bin("logos_host_plain"),
+            host_remote_bin: bin("logos_host_remote"),
             bundled_modules: runtime.join("modules"),
             app_modules: app_modules.to_path_buf(),
             data: data.to_path_buf(),

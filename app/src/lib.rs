@@ -7,7 +7,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
 use demo_core::model::BlockEvent;
-use demo_core::{Demo, DemoEvent, EventSink, Paths, PendingPairing};
+use demo_core::{exe, Demo, DemoEvent, EventSink, Paths, PendingPairing};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel, Weak};
 
 slint::include_modules!();
@@ -45,11 +45,11 @@ pub fn desktop_paths() -> Paths {
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
         .unwrap_or_default();
-    if std::env::var_os("LOGOS_CORE_DEMO_HOME").is_none() && exe_dir.join("logos_runtime").exists() {
+    if std::env::var_os("LOGOS_CORE_DEMO_HOME").is_none() && exe_dir.join(exe("logos_runtime")).exists() {
         return Paths {
-            runtime_bin: exe_dir.join("logos_runtime"),
-            host_plain_bin: exe_dir.join("logos_host_plain"),
-            host_remote_bin: exe_dir.join("logos_host_remote"),
+            runtime_bin: exe_dir.join(exe("logos_runtime")),
+            host_plain_bin: exe_dir.join(exe("logos_host_plain")),
+            host_remote_bin: exe_dir.join(exe("logos_host_remote")),
             bundled_modules: exe_dir.join("../modules"),
             app_modules: exe_dir.join("../app-modules"),
             data: data_dir(),
@@ -66,6 +66,9 @@ pub fn desktop_paths() -> Paths {
 }
 
 fn data_dir() -> PathBuf {
+    if cfg!(windows) {
+        return windows_local_app_data().join("Logos Core Demo");
+    }
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
     if cfg!(target_os = "macos") {
         home.join("Library/Application Support/Logos Core Demo")
@@ -78,14 +81,32 @@ fn data_dir() -> PathBuf {
 }
 
 // Socket paths hold ~104 bytes, and macOS's own TMPDIR alone takes half of it.
+// Windows endpoints are named pipes, not files.
 fn short_tmp() -> PathBuf {
+    if cfg!(windows) {
+        return std::env::temp_dir().join("logos-core-demo");
+    }
     let user = std::env::var("USER").unwrap_or_else(|_| "user".into());
     PathBuf::from(format!("/tmp/lcd-{user}"))
 }
 
+// Where logosctl keeps its config on Windows: %LOCALAPPDATA%, else %USERPROFILE%.
+fn windows_local_app_data() -> PathBuf {
+    ["LOCALAPPDATA", "USERPROFILE"]
+        .iter()
+        .find_map(|var| std::env::var_os(var))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
 fn default_local_invite() -> String {
     let dir = std::env::var_os("LOGOSCTL_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| {
-        std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".logosctl")
+        let home = if cfg!(windows) {
+            windows_local_app_data()
+        } else {
+            std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
+        };
+        home.join(".logosctl")
     });
     dir.join("peering/local-invite").to_string_lossy().into_owned()
 }
@@ -95,7 +116,7 @@ fn peer_name() -> String {
     if let Some(model) = android::device_model() {
         return format!("Logos Core Demo on {model}");
     }
-    let host = std::env::var("HOSTNAME")
+    let host = std::env::var(if cfg!(windows) { "COMPUTERNAME" } else { "HOSTNAME" })
         .ok()
         .or_else(|| std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_string()))
         .filter(|h| !h.is_empty())
@@ -116,6 +137,7 @@ pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>, links: Opti
     -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     ui.set_desktop(desktop);
+    ui.set_single_process_available(!cfg!(windows));
     ui.set_local_invite_path(default_local_invite().into());
     if let Some(invite) = invite {
         ui.set_invite_text(invite.into());

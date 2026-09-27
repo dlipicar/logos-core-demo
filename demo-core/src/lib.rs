@@ -8,4 +8,4 @@ pub mod demo;
 pub mod invite;
 pub mod model;
 
-pub use demo::{Demo, DemoEvent, EventSink, Paths, Peer, PendingPairing, NODE};
+pub use demo::{exe, Demo, DemoEvent, EventSink, Paths, Peer, PendingPairing, NODE};

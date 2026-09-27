@@ -69,6 +69,12 @@
       # The stack's Android outputs, through the runtime's own pins.
       cli = logos-logoscore-cli.inputs;
       androidLiblogos = cli.logos-liblogos.packages.aarch64-android;
+      windows = import ./nix/windows.nix {
+        inherit lib logos-nix nixpkgs rust-overlay logos-rust-sdk;
+        src = rustSrc;
+      };
+      windowsLiblogos = cli.logos-liblogos.packages.x86_64-windows;
+      windowsPeering = cli.logos-peering.packages.x86_64-windows;
 
       # What winit and femtovg open at run time on Linux.
       linuxGuiLibs = pkgs: with pkgs; [
@@ -229,6 +235,25 @@
                 searchPath = [ "${runtime}/lib" "${peering.libpeering}/lib" ]
                   ++ map (p: "${lib.getLib p}/lib") [ a.boost a.openssl a.spdlog a.fmt a.libsodium a.zstd a.libiconv a.libblake3 ];
               };
+          };
+          # Cross-built with MinGW on x86_64-linux; modules in their own processes.
+          x86_64-windows = rec {
+            programs = windows.programs { liblogosLib = windowsLiblogos.logos-liblogos-lib; };
+            portable = windows.portable {
+              inherit programs;
+              liblogos = windowsLiblogos;
+              hostRemote = windowsPeering.logos_host_remote;
+              bundledModules = [
+                windowsLiblogos.logos-liblogos-modules
+                windowsPeering.peering_identity-install
+                windowsPeering.peering_module-install
+              ];
+              appModules = [
+                modules.hello_module.packages.x86_64-windows.install
+                modules.bc_probe.packages.x86_64-windows.install
+              ];
+            };
+            zip = windows.zip portable;
           };
         };
 
