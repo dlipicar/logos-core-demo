@@ -2607,7 +2607,7 @@ dependencies = [
 [[package]]
 name = "logos-rust-sdk"
 version = "0.3.0"
-source = "git+https://github.com/logos-co/logos-rust-sdk?rev=3311af8405de9993d1f01351d00d3254650a2cd1#3311af8405de9993d1f01351d00d3254650a2cd1"
+source = "git+https://github.com/logos-co/logos-rust-sdk?rev=43d619cfea63b7ca958a587d935e1ab97cdc1823#43d619cfea63b7ca958a587d935e1ab97cdc1823"
 dependencies = [
  "serde",
  "serde_json",

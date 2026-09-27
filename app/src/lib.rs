@@ -7,7 +7,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
 use demo_core::model::BlockEvent;
-use demo_core::{exe, Demo, DemoEvent, EventSink, Paths, PendingPairing};
+use demo_core::{exe, Demo, DemoEvent, EventSink, Paths, PendingPairing, Placement};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel, Weak};
 
 slint::include_modules!();
@@ -353,7 +353,8 @@ impl Worker {
         let sink: EventSink = std::sync::Arc::new(move |event| {
             let _ = tx.send(Cmd::Event(event));
         });
-        let demo = match Demo::start(SHELL, &peer_name(), &self.paths, single_process, sink) {
+        let placement = if single_process { Placement::SingleProcess } else { Placement::Subprocess };
+        let demo = match Demo::start(SHELL, &peer_name(), &self.paths, placement, sink) {
             Ok(demo) => demo,
             Err(e) => {
                 self.ui(|ui| ui.set_runtime_state("STOPPED".into()));

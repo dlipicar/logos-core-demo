@@ -1,7 +1,7 @@
 //! Runs the demo's steps without a UI and prints one JSON object per line.
 //!
 //!   logos-core-demo-headless --runtime DIR --modules DIR --data DIR --tmp DIR
-//!       [--name NAME] [--single-process] [--hello]
+//!       [--name NAME] [--single-process | --embedded] [--hello]
 //!       [--link-local FILE | --invite FILE | --pair HOST:PORT]
 //!       [--remote-module NAME] [--watch SECONDS] [--expect-blocks N] [--probe]
 //!       [--whoami] [--caller-gate] [--narrow-live] [--expect-denied] [--await-restart SECONDS]
@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use demo_core::{Demo, DemoEvent, Paths};
+use demo_core::{Demo, DemoEvent, Paths, Placement};
 use serde_json::{json, Value};
 
 fn emit(step: &str, value: Value) {
@@ -30,7 +30,7 @@ struct Args {
     tmp: PathBuf,
     name: String,
     hello: bool,
-    single_process: bool,
+    placement: Placement,
     link_local: Option<PathBuf>,
     invite: Option<PathBuf>,
     pair: Option<(String, i64)>,
@@ -53,7 +53,7 @@ fn parse_args() -> Args {
         tmp: PathBuf::new(),
         name: "logos-core-demo".into(),
         hello: false,
-        single_process: false,
+        placement: Placement::Subprocess,
         link_local: None,
         invite: None,
         pair: None,
@@ -77,7 +77,8 @@ fn parse_args() -> Args {
             "--tmp" => args.tmp = value().into(),
             "--name" => args.name = value(),
             "--hello" => args.hello = true,
-            "--single-process" => args.single_process = true,
+            "--single-process" => args.placement = Placement::SingleProcess,
+            "--embedded" => args.placement = Placement::Embedded,
             "--link-local" => args.link_local = Some(value().into()),
             "--invite" => args.invite = Some(value().into()),
             "--pair" => {
@@ -152,7 +153,7 @@ fn main() {
     });
     let paths = Paths::desktop(&args.runtime, &args.modules, &args.data, &args.tmp);
     let started = Instant::now();
-    let demo = Demo::start("core_demo", &args.name, &paths, args.single_process, sink)
+    let demo = Demo::start("core_demo", &args.name, &paths, args.placement, sink)
         .unwrap_or_else(|e| fail("start", e));
     emit("start", json!({ "ms": started.elapsed().as_millis() as u64 }));
 
@@ -265,6 +266,7 @@ fn main() {
         let names: Vec<Value> = stats.as_array().into_iter().flatten()
             .filter_map(|row| row.get("name").cloned()).collect();
         emit("processes", Value::Array(names));
+        emit("isolation", json!({ "local_sockets": local_sockets(&paths.tmp), "children": has_children() }));
     }
 
     if args.watch > 0 {
@@ -305,4 +307,47 @@ fn main() {
     }
     demo.stop();
     emit("stopped", Value::Null);
+}
+
+// Socket files under `dir`: the runtime's local endpoints.
+fn local_sockets(dir: &std::path::Path) -> usize {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        fn walk(dir: &std::path::Path, found: &mut usize) {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                match entry.file_type() {
+                    Ok(kind) if kind.is_socket() => *found += 1,
+                    Ok(kind) if kind.is_dir() => walk(&entry.path(), found),
+                    _ => {}
+                }
+            }
+        }
+        let mut found = 0;
+        walk(dir, &mut found);
+        found
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        0
+    }
+}
+
+// Whether this process has a child: a spawned runtime, or a module host.
+fn has_children() -> bool {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
+        }
+        const WNOHANG: i32 = 1;
+        const ECHILD: i32 = 10;
+        let reaped = unsafe { waitpid(-1, std::ptr::null_mut(), WNOHANG) };
+        !(reaped == -1 && std::io::Error::last_os_error().raw_os_error() == Some(ECHILD))
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
 }

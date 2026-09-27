@@ -23,6 +23,18 @@ pub const NODE: &str = "blockchain_module";
 const PROBE: &str = "bc_probe";
 const HELLO: &str = "hello_module";
 
+/// Where the app's runtime runs, and its modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    /// A spawned runtime; each module in a host process of its own.
+    Subprocess,
+    /// A spawned runtime that runs every module itself, the import too.
+    SingleProcess,
+    /// The runtime in this process, every module in it, and no local socket:
+    /// where no process may be spawned (iOS). Once per process.
+    Embedded,
+}
+
 /// `name` as this platform names a program: `name.exe` on Windows.
 pub fn exe(name: &str) -> String {
     format!("{name}{}", std::env::consts::EXE_SUFFIX)
@@ -111,9 +123,9 @@ fn peering(reply: Result<BTreeMap<String, Value>, logos_rust_sdk::LogosError>) -
 }
 
 impl Demo {
-    /// Spawns this app's runtime; up to two minutes while it loads its modules.
-    /// `single_process` keeps every module in the runtime's process, the import too.
-    pub fn start(shell: &str, name: &str, paths: &Paths, single_process: bool, sink: EventSink)
+    /// Starts this app's runtime where `placement` says; up to two minutes while
+    /// it loads its modules.
+    pub fn start(shell: &str, name: &str, paths: &Paths, placement: Placement, sink: EventSink)
         -> Result<Demo, String> {
         std::fs::create_dir_all(&paths.data).map_err(fail)?;
         std::fs::create_dir_all(&paths.tmp).map_err(fail)?;
@@ -128,10 +140,12 @@ impl Demo {
             .host_plain_path(&paths.host_plain_bin)
             .host_remote_path(&paths.host_remote_bin)
             .tmp_dir(&paths.tmp);
-        let config = if single_process {
-            config.placement_policy(json!({ "single_process": true }))
-        } else {
-            config
+        let config = match placement {
+            Placement::Subprocess => config,
+            Placement::SingleProcess => config.placement_policy(json!({ "single_process": true })),
+            Placement::Embedded => config
+                .embedded(true)
+                .placement_policy(json!({ "single_process": true, "local_endpoints": false })),
         };
         let core = LogosCore::start(config).map_err(fail)?;
         let exit_sink = sink.clone();
@@ -143,6 +157,11 @@ impl Demo {
 
     pub fn core(&self) -> &LogosCore {
         &self.core
+    }
+
+    /// Whether a stopped runtime can start again in this process (not embedded).
+    pub fn can_restart(&self) -> bool {
+        !self.core.is_embedded()
     }
 
     fn follow_peering(&self) -> Result<(), String> {

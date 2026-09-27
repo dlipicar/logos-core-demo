@@ -41,7 +41,7 @@ app() {
   mkdir -p "$work/$name-tmp"
   "$HEADLESS" --runtime "$APP_HOME/runtime" --modules "$APP_HOME/modules" \
     --data "$work/$name-data" --tmp "$work/$name-tmp" --name "$name" \
-    --remote-module fake_blockchain ${SINGLE_PROCESS:+--single-process} "$@"
+    --remote-module fake_blockchain ${SINGLE_PROCESS:+--single-process} ${EMBEDDED:+--embedded} "$@"
 }
 wait_invite() {  # the local invite is replaced once used
   for _ in $(seq 100); do [ -s "$work/b-invite" ] && [ "$(cat "$work/b-invite")" != "${1:-}" ] && return; sleep 0.2; done
@@ -59,10 +59,16 @@ app a1 --hello --link-local "$work/b-invite" --caller-gate --narrow-live --probe
 [ "$(step "$out" node | jq -r .chain_id)" = fake-devnet ]
 [ "$(step "$out" probe | jq -r .ok)" = true ]
 # Where the import's facade runs: in the runtime's process, or a host of its own.
-if [ -n "${SINGLE_PROCESS:-}" ]; then
+if [ -n "${SINGLE_PROCESS:-}${EMBEDDED:-}" ]; then
   [ "$(step "$out" processes | jq length)" = 0 ]
 else
   [ "$(step "$out" processes | jq 'index("blockchain_module") != null')" = true ]
+fi
+# Embedded, the app has no child and binds no local socket; spawned, it has both.
+if [ -n "${EMBEDDED:-}" ]; then
+  [ "$(step "$out" isolation | jq -c '[.children, .local_sockets]')" = '[false,0]' ]
+else
+  [ "$(step "$out" isolation | jq -c '[.children, .local_sockets > 0]')" = '[true,true]' ]
 fi
 [ "$(step "$out" callers | jq -r .shell_refused)" = true ]
 [ "$(step "$out" narrow_live | jq -r .after_refused)" = true ]
