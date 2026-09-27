@@ -1,6 +1,6 @@
 # Logos Core Demo
 
-Qt-free apps for macOS, Linux and Android that run a Logos runtime of their own
+Qt-free apps for macOS, Linux, Windows and Android that run a Logos runtime of their own
 and use a Logos blockchain node that runs somewhere else: in a `logosctl` daemon
 on the same computer, or on another one on the network.
 
@@ -9,7 +9,7 @@ It is [logoslib-android-poc](https://github.com/fryorcraken/logoslib-android-poc
 
 | | the POC | this demo |
 |---|---|---|
-| Platforms | Android | macOS, Linux, Android |
+| Platforms | Android | macOS, Linux, Windows, Android |
 | UI and runtime | Kotlin, JNI, Qt | Rust and Slint; the runtime is spawned, no Qt anywhere |
 | The node | runs on the phone | runs in a daemon; the app imports it through peering |
 | Calling modules | `LogosAPI` by name | clients generated from each module's contract |
@@ -91,6 +91,22 @@ adb shell am start -a android.intent.action.VIEW -d "logos-pair:…@10.0.2.2:744
 
 `packages.aarch64-android.*` build on x86_64-linux, which logos-nix names as
 Android's build system.
+
+### Windows
+
+```bash
+nix build .#packages.x86_64-windows.zip    # on x86_64-linux: logos-core-demo-x86_64-windows.zip
+```
+
+Unzip it anywhere and run `bin\logos-core-demo.exe`. `bin\` holds the app, the
+headless client, `logos_runtime.exe`, both module hosts and every DLL they or the
+modules import (`nix/windows-dlls.py` walks the import tables at build time and
+fails on one it cannot place); `modules\` and `app-modules\` hold the modules. The
+app keeps its data in `%LOCALAPPDATA%\Logos Core Demo` and looks for a local
+daemon's invite in `%LOCALAPPDATA%\.logosctl`, where `logosctl` keeps it.
+
+Modules run in their own processes there: the in-process checkbox is hidden,
+since the Windows runtime has no in-process facades yet.
 
 ## Tests
 
