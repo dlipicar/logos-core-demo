@@ -36,6 +36,8 @@ export component AppWindow inherits Window {
     in property <string> display-id: "-";
     in-out property <string> local-invite-path;
     in-out property <string> invite-text;
+    // Runtime 0, Local 1, Connect 2, Peers 3, Node 4, About 5.
+    in-out property <int> current-tab;
     in-out property <string> pair-host;
     in-out property <string> pair-port: "7443";
     in property <string> pair-code;
@@ -78,6 +80,7 @@ export component AppWindow inherits Window {
         y: root.safe-area-insets.top;
         width: root.width - root.safe-area-insets.left - root.safe-area-insets.right;
         height: root.height - root.safe-area-insets.top - root.safe-area-insets.bottom;
+        current-index <=> root.current-tab;
         Tab {
             title: "Runtime";
             ScrollView {

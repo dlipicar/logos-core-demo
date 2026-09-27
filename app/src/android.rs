@@ -38,8 +38,9 @@ fn start(app: AndroidApp) -> Result<(), String> {
         tmp: cache,
     };
     let invite = launch_invite(&app);
+    let links = pending_links(&app);
     slint::android::init(app).map_err(|e| e.to_string())?;
-    crate::run_with(paths, false, invite).map_err(|e| e.to_string())
+    crate::run_with(paths, false, invite, Some(links)).map_err(|e| e.to_string())
 }
 
 /// The logos-pair: URI the app was opened with (a scanned QR code), if any. Only
@@ -60,6 +61,30 @@ fn launch_invite(app: &AndroidApp) -> Option<String> {
         Ok(Some(env.get_string(&jni::objects::JString::from(data))?.into()))
     };
     read().ok().flatten().filter(|uri| uri.starts_with("logos-pair:"))
+}
+
+/// Links opened while the app runs: LogosActivity keeps the one onNewIntent
+/// delivered, and this takes it (from the UI thread, which is attached).
+fn pending_links(app: &AndroidApp) -> crate::LinkSource {
+    let (vm, activity) = (app.vm_as_ptr() as usize, app.activity_as_ptr() as usize);
+    Box::new(move || {
+        let vm = unsafe { jni::JavaVM::from_raw(vm as *mut jni::sys::JavaVM) }.ok()?;
+        let mut env = vm.attach_current_thread_permanently().ok()?;
+        let link = env.with_local_frame(8, |env| -> jni::errors::Result<Option<String>> {
+            let activity = unsafe { jni::objects::JObject::from_raw(activity as jni::sys::jobject) };
+            let class = env.get_object_class(&activity)?;
+            let link = env.call_static_method(&class, "takePendingLink", "()Ljava/lang/String;", &[])?.l()?;
+            if link.is_null() {
+                return Ok(None);
+            }
+            Ok(Some(env.get_string(&jni::objects::JString::from(link))?.into()))
+        });
+        if link.is_err() {
+            // e.g. NoSuchMethodError from a plain NativeActivity; clear it for the next call.
+            let _ = env.exception_clear();
+        }
+        link.ok().flatten().filter(|uri| uri.starts_with("logos-pair:"))
+    })
 }
 
 /// This library's own directory: where the package manager extracted the APK's libs.

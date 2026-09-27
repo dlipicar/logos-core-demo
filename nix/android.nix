@@ -1,6 +1,6 @@
 # The Android app: the Slint UI as a NativeActivity library, and an APK that
 # carries it with the runtime's executables, plugins and libraries.
-{ lib, logos-nix, nixpkgs, rust-overlay, src }:
+{ lib, logos-nix, nixpkgs, rust-overlay, logos-rust-sdk, src }:
 
 let
   target = logos-nix.lib.mobileTargets.aarch64-android;
@@ -13,8 +13,6 @@ let
   triple = "aarch64-linux-android";
   toolchain = bpkgs.rust-bin.stable."1.96.0".default.override { targets = [ triple ]; };
   rustPlatform = bpkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; };
-  cc = apkgs.stdenv.cc;
-  u = builtins.replaceStrings [ "-" ] [ "_" ] triple;
 
   # Slint renders with Skia on Android; skia-bindings would download this.
   skiaBinaries = bpkgs.fetchurl {
@@ -35,20 +33,16 @@ in
     includeNDK = false;
   }).androidsdk;
 
-  # liblogos_core_demo.so, linked against the Android liblogos in `hostLibDir`.
-  appLib = { hostLibDir }: rustPlatform.buildRustPackage {
+  # liblogos_core_demo.so, linked against liblogos' Android lib output.
+  appLib = { liblogosLib }:
+    let host = logos-rust-sdk.lib.hostBuildSupportAndroid { inherit liblogosLib; androidPkgs = apkgs; };
+    in rustPlatform.buildRustPackage {
     pname = "logos-core-demo-android";
     version = "0.1.0";
     inherit src;
     cargoLock = { lockFile = src + "/Cargo.lock"; allowBuiltinFetchGit = true; };
-    nativeBuildInputs = [ cc bpkgs.jdk17 ];
-    env = {
-      CARGO_BUILD_TARGET = triple;
-      "CARGO_TARGET_${lib.toUpper u}_LINKER" = "${cc}/bin/${cc.targetPrefix}cc";
-      "CC_${u}" = "${cc}/bin/${cc.targetPrefix}cc";
-      "CXX_${u}" = "${cc}/bin/${cc.targetPrefix}c++";
-      "AR_${u}" = "${cc.bintools}/bin/${cc.targetPrefix}ar";
-      LOGOS_HOST_LIB_DIR = hostLibDir;
+    nativeBuildInputs = host.nativeBuildInputs ++ [ bpkgs.jdk17 ];
+    env = host.env // {
       # Slint's Android backend compiles a Java helper against android.jar.
       ANDROID_HOME = apkgs.androidPkgs.sdkRoot;
       JAVA_HOME = bpkgs.jdk17.home;
@@ -117,8 +111,11 @@ in
         value = "${m.dir}/${m.name}_plugin.so";
       }) modules);
       permissions = [ "android.permission.INTERNET" "android.permission.ACCESS_NETWORK_STATE" ];
-      # An invite opens the app (a QR code scanned by the camera, a link).
+      # An invite opens the app (a QR code scanned by the camera, a link), and
+      # LogosActivity keeps one that arrives while it runs.
       launchMode = "singleTask";
+      activity = "co.logos.coredemo.LogosActivity";
+      javaSources = [ ../app/android/java/co/logos/coredemo/LogosActivity.java ];
       intentFilters = ''
         <intent-filter>
           <action android:name="android.intent.action.VIEW"/>

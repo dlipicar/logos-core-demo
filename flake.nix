@@ -63,7 +63,7 @@
         fileset = lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./demo-core ./headless ./app ];
       };
       android = import ./nix/android.nix {
-        inherit lib logos-nix nixpkgs rust-overlay;
+        inherit lib logos-nix nixpkgs rust-overlay logos-rust-sdk;
         src = rustSrc;
       };
       # The stack's Android outputs, through the runtime's own pins.
@@ -188,7 +188,7 @@
         // {
           # Built on the build system logos-nix names for Android.
           aarch64-android = rec {
-            app-lib = android.appLib { hostLibDir = "${androidLiblogos.logos-liblogos-lib}/lib"; };
+            app-lib = android.appLib { liblogosLib = androidLiblogos.logos-liblogos-lib; };
             apk =
               let
                 a = android.apkgs;

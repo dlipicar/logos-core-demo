@@ -103,16 +103,32 @@ fn peer_name() -> String {
 }
 
 pub fn run(paths: Paths, desktop: bool) -> Result<(), slint::PlatformError> {
-    run_with(paths, desktop, None)
+    run_with(paths, desktop, None, None)
 }
 
+/// A source of invites opened while the app runs, polled on the UI thread.
+pub type LinkSource = Box<dyn Fn() -> Option<String>>;
+
 /// `invite`: one the app was opened with, ready to redeem once the runtime runs.
-pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>) -> Result<(), slint::PlatformError> {
+/// `links`: invites opened later (Android: a logos-pair: link or QR code).
+pub fn run_with(paths: Paths, desktop: bool, invite: Option<String>, links: Option<LinkSource>)
+    -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     ui.set_desktop(desktop);
     ui.set_local_invite_path(default_local_invite().into());
     if let Some(invite) = invite {
         ui.set_invite_text(invite.into());
+        ui.set_current_tab(2);
+    }
+    let link_timer = slint::Timer::default();
+    if let Some(links) = links {
+        let weak = ui.as_weak();
+        link_timer.start(slint::TimerMode::Repeated, Duration::from_millis(500), move || {
+            if let (Some(link), Some(ui)) = (links(), weak.upgrade()) {
+                ui.set_invite_text(link.into());
+                ui.set_current_tab(2);
+            }
+        });
     }
 
     let (tx, rx) = channel::<Cmd>();
