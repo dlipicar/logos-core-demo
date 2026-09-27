@@ -108,7 +108,7 @@ fn default_local_invite() -> String {
         };
         home.join(".logosctl")
     });
-    dir.join("peering/local-invite").to_string_lossy().into_owned()
+    dir.join("peering").join("local-invite").to_string_lossy().into_owned()
 }
 
 fn peer_name() -> String {
