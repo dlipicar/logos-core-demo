@@ -34293,11 +34293,11 @@
         "nixpkgs-windows": "nixpkgs-windows_405"
       },
       "locked": {
-        "lastModified": 1790471013,
-        "narHash": "sha256-4MqZee6BVHOKioD/Ilazn1lUrWDy57Hk9E5W3zuH0mo=",
+        "lastModified": 1790472269,
+        "narHash": "sha256-hnPJ9oTYSAoeb84rMwU0jC58/BlJ3vokquZYdaBqB0g=",
         "owner": "logos-co",
         "repo": "logos-nix",
-        "rev": "c141d52cdd041fc8a541f5729a12382690a72b7f",
+        "rev": "63e6471b421593bafbaae8631f0dc2dce0860036",
         "type": "github"
       },
       "original": {
